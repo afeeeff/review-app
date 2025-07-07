@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "review-app-storage-465117",
+  "private_key_id": "c0ab4c4cf904fc7a46b964f43c03ac73e3dca8f5",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDGSpE7MIHehWEH\nGUipSsFFBzI7wotvtcCitf+8e5v+4x8D4i22oPtT8Dt36mTizpSADcKvBOU8+CKT\nlTgUHnInVLGVhnRoQ41fp9w7ip8UkyynNygZrsS5c4z4g1nGMmYPxozArE1r+ugh\n5f46e9wqjkjq9UM0OENHUiXwlJm1TiUCg9JGTfqAf2Ser32aHNEJwa6BEB9y+nxx\n8BArwPs9+jahsXcCoW7mc5dm+emmiUj4AKjCpOWVESSdctZ9+3BIrGwmHtgsEAEt\nRHL+9quLUl8EAgtNpGrebfTDmBlPuSQXmFB7ltYTmbgpL5T+2fI7bWzB+fOOYMGe\nzbdUf+VtAgMBAAECggEAEHmxG/Mhk0DPSUT1R9WlfcwFhTgamEdIcGyBSWKW2UR7\nNvojtLUm9Lg05LeFtt+VsJcUGjEkr95pFwySqn9GGlT75VHU2bXlKPG8R3ky0wWQ\nc/tN+mZOQ59hcuONAb39w2lKmBao3yQrheeDak4QwrtsPRNwSEY1dtdRPi5GoCzu\nzYO0zRgltILoEo0LoTcjK+15Yp/vge0DC8If/EhRreMe2vW0gJ3lHX4IwIPlp1P7\npb4a1rlz2aCkkG4nwafEpjl+5uIYQFb0DKxVDw57p8m3cd4y1gUOVjcAXTxazSVy\nkJkzhG0TU8VO8SGvG/Drw81JlOXlc6lnT+qJEZXBmQKBgQDlY2x5Zc6t6K3DefwG\nte+z+OMMQGCv/c542pc3pGusyOZPeD4jc4wSEdbuixJGLbzyq3qHy9hzZjsm8BlT\nUxmgg+jgbP956mI9XSBhvGR8upurT2fxRmpnhExOOnwHkAa4kYbPyhtTkxUabH4p\nEl5DZbbVRoup1dAoSGoNXV7lmQKBgQDdS5hKTOak6X/ef3d6f8Q1VWKJ8SujghOC\ndL+2J4dss2dLHtibXlvcMfxDAIV0bKCFj3KOOzmJiHqohUWp9mbzfMeJNq8R+vX+\nmPDe4OwQCEEcQmlKyFzqYw9SxRytw04nZihAdIZws/HCeBszyKhQAozEWQeeHn8u\nhQWmROW69QKBgQCvUJWPEqgrcjGbvJdJ6bMRsZ6Vtn4vA6PR6f64oAlLPSAIjLWx\nEpZzGP9TwSZuTHakYTp8nucHC5MZ51bzwAdODoLlQ2jeHKyIiaw+BmYmjdh7zWx7\nkn2wMATBpSE2BnWcilymYqkP7tGqKFEjws4YZJyf1BLZ8nfs0at8G2hzwQKBgAdf\n5YtUVLtaLLC1fr3OVDOSzN3b86BXTV8jlN/1IUY2FFMkjANheZ407DsvYUMn+5F3\n3lFvF9PFgJDtIA0x8OxcVCn2cI8g1eHOJvjGdhdyrvjKHcgoNTB6bKBNgU8pGwml\nFeJP/8rxtDTO29k17qX778T7Uo2qZoKeXDnWQfGhAoGALdaN1aKH4tF1SXsSkshd\nlnugyBkyYF12Vih96fo6HYpTyisIe8qa4BJ6F0t6djQr/ihwokVjC7X6SXR9mH9A\neOzjOs/tWhK5ZW0djWTSOsJIgpW4ddR6X6seCZuit6JimMB8eTC1SC129V//feXy\nFsbgiwt3hT7SqULURkT+R90=\n-----END PRIVATE KEY-----\n",
+  "client_email": "review-app-uploader@review-app-storage-465117.iam.gserviceaccount.com",
+  "client_id": "100857947263728370209",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/review-app-uploader%40review-app-storage-465117.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

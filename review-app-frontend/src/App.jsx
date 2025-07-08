@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import ClientReviewsDashboard from './ClientReviewsDashboard.jsx'; // UPDATED: Import the separate dashboard component with .jsx extension
+import ClientReviewsDashboard from './ClientReviewsDashboard.jsx';
 
 // Main App component
 const App = () => {
@@ -17,6 +17,7 @@ const App = () => {
   const [invoiceProcessingError, setInvoiceProcessingError] = useState('');
   const [extractedInvoiceData, setExtractedInvoiceData] = useState(null);
   const [uploadedInvoiceFileUrl, setUploadedInvoiceFileUrl] = useState(null);
+  const [invoiceDateError, setInvoiceDateError] = useState('');
 
   // States for customer details (now pre-filled from invoice, but kept for clarity)
   const [customerName, setCustomerName] = useState('');
@@ -196,24 +197,36 @@ const App = () => {
 
   // Function to handle confirmation of extracted details and proceed to review
   const handleConfirmDetailsAndProceed = () => {
-    // Optionally add client-side validation for extracted data here if needed
-    if (!customerName.trim() || !customerMobile.trim()) {
-      setCustomerDetailsError('Customer name and mobile must be present (extracted or manually entered).');
-      return;
-    }
-    if (!/^\d{10}$/.test(customerMobile.trim())) {
-      setCustomerDetailsError('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-    setCustomerDetailsError(''); // Clear any previous errors
-    setCurrentView('customerReview');
-    setCustomerRating(0); // Reset rating for new review
-    setShowVoicePrompt(false);
-    setSubmissionMessage(''); // Ensure this is reset using the setter function
-    setFeedbackType('');
-    setAudioBlob(null);
-    setRecordingError('');
-  };
+  const invoiceDate = extractedInvoiceData?.invoiceDate || '';
+  const isValidDateFormat = /^\d{2}\/\d{2}\/\d{4}$/.test(invoiceDate);
+
+  if (!isValidDateFormat) {
+    setInvoiceDateError('Date must be in DD/MM/YYYY format.');
+    return;
+  } else {
+    setInvoiceDateError('');
+  }
+
+  if (!customerName.trim() || !customerMobile.trim()) {
+    setCustomerDetailsError('Customer name and mobile must be present (extracted or manually entered).');
+    return;
+  }
+
+  if (!/^\d{10}$/.test(customerMobile.trim())) {
+    setCustomerDetailsError('Please enter a valid 10-digit mobile number.');
+    return;
+  }
+
+  setCustomerDetailsError('');
+  setCurrentView('customerReview');
+  setCustomerRating(0);
+  setShowVoicePrompt(false);
+  setSubmissionMessage('');
+  setFeedbackType('');
+  setAudioBlob(null);
+  setRecordingError('');
+};
+
 
 
   // Function to handle navigation to the Reviews Dashboard page
@@ -270,7 +283,7 @@ const App = () => {
     // RIFF type
     writeString(view, 8, 'WAVE');
     // format chunk identifier
-    view.setUint32(12, 16, true);
+    writeString(view, 12, 'fmt ');
     // format chunk length
     view.setUint32(16, 16, true);
     // sample format (1 for PCM)
@@ -473,6 +486,7 @@ const App = () => {
 
     // Encode the resampled samples into a WAV Blob at the target 16000 Hz
     const wavBlob = encodeWAV(resampledSamples, targetSampleRate); // Pass the target sample rate (16000 Hz)
+    console.log(`Generated WAV Blob size: ${wavBlob.size} bytes`); // NEW LOG
     setAudioBlob(wavBlob);
 
     // Stop all tracks in the MediaStream
@@ -588,7 +602,7 @@ const App = () => {
     if (rating === 2) return '😠';
     if (rating === 3) return '😞';
     if (rating === 4) return '😐';
-    if (rating === 5) return '�';
+    if (rating === 5) return '😕';
     if (rating === 6) return '🙂';
     if (rating === 7) return '😊';
     if (rating === 8) return '😄';
@@ -845,10 +859,21 @@ const App = () => {
                         <input
                           type="text"
                           value={extractedInvoiceData.invoiceDate || ''}
-                          onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, invoiceDate: e.target.value }))}
+                          onChange={(e) => {
+  const newDate = e.target.value;
+  const isValid = /^\d{2}\/\d{2}\/\d{4}$/.test(newDate);
+  setExtractedInvoiceData(prev => ({ ...prev, invoiceDate: newDate }));
+  setInvoiceDateError(isValid || newDate === '' ? '' : 'Date must be in DD/MM/YYYY format.');
+}}
+                          pattern="\d{2}/\d{2}/\d{4}" // Client-side validation pattern
+                          title="Please enter date in DD/MM/YYYY format"
                           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
                           placeholder="N/A"
                         />
+                        {invoiceDateError && (
+  <p className="text-red-600 text-sm font-medium mt-1">{invoiceDateError}</p>
+)}
+
                       </div>
                       <div className="col-span-1">
                         <p className="font-semibold text-gray-700">VIN:</p>

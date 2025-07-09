@@ -3,31 +3,35 @@
 const nodemailer = require('nodemailer');
 
 // Configure your email transporter
-// IMPORTANT: Replace with your actual SMTP details.
-// For production, use environment variables for these credentials.
-// Example for Gmail (less secure apps or app passwords required):
-// const transporter = nodemailer.createTransport({
-//   service: 'gmail',
-//   auth: {
-//     user: process.env.EMAIL_USER, // Your Gmail address
-//     pass: process.env.EMAIL_PASS, // Your Gmail App Password (recommended over regular password)
-//   },
-// });
-
-// Example for a generic SMTP server (e.g., SendGrid, Mailgun, your own server)
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.example.com', // e.g., 'smtp.sendgrid.net'
-  port: process.env.EMAIL_PORT || 587, // Common ports: 587 (TLS), 465 (SSL)
-  secure: process.env.EMAIL_SECURE === 'true' || false, // true for 465, false for other ports
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === 'true', // Use 'true' for 465, 'false' for other ports
   auth: {
-    user: process.env.EMAIL_USER || 'your_email@example.com',
-    pass: process.env.EMAIL_PASS || 'your_email_password',
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
-  // Optional: Disable TLS/SSL certificate validation for testing (NOT recommended for production)
-  // tls: {
-  //   rejectUnauthorized: false
-  // }
+  tls: {
+    // Do not fail on invalid certs for development/testing, but be cautious in production
+    rejectUnauthorized: false
+  }
 });
+
+/**
+ * Sends a generic email using the configured Nodemailer transporter.
+ * @param {Object} mailOptions - Options for the email (from, to, subject, html, attachments, etc.)
+ */
+const sendEmail = async (mailOptions) => {
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent: %s', info.messageId);
+    // console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // Only for ethereal.email testing
+    return info;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw new Error('Failed to send email.');
+  }
+};
 
 /**
  * Sends an email notification for a customer review with a rating between 1 and 8.
@@ -39,6 +43,7 @@ const transporter = nodemailer.createTransport({
  * @param {object} reviewDetails.invoiceData - Extracted invoice data.
  * @param {string} reviewDetails.customerName - Name of the customer.
  * @param {string} reviewDetails.customerMobile - Mobile number of the customer.
+ * @param {string} reviewDetails.invoiceFileUrl - URL to the uploaded invoice file in GCS.
  */
 exports.sendReviewEmail = async (reviewDetails) => {
   const {
@@ -48,7 +53,8 @@ exports.sendReviewEmail = async (reviewDetails) => {
     voiceAudioUrl,
     invoiceData,
     customerName,
-    customerMobile
+    customerMobile,
+    invoiceFileUrl // Added invoiceFileUrl to reviewDetails
   } = reviewDetails;
 
   // TODO: In the future, fetch these recipient emails from a database (e.g., superuser settings)
@@ -76,7 +82,7 @@ exports.sendReviewEmail = async (reviewDetails) => {
         <li><strong>Invoice Number:</strong> ${invoiceData.invoiceNumber || 'N/A'}</li>
         <li><strong>Invoice Date:</strong> ${invoiceData.invoiceDate || 'N/A'}</li>
         <li><strong>VIN:</strong> ${invoiceData.vin || 'N/A'}</li>
-        <li><strong>Invoice File URL:</strong> <a href="${voiceAudioUrl.replace('.wav', '.pdf').replace('.mp3', '.pdf').replace('.ogg', '.pdf')}" target="_blank">View Invoice</a> (if applicable)</li>
+        <li><strong>Invoice File URL:</strong> ${invoiceFileUrl ? `<a href="${invoiceFileUrl}" target="_blank">View Invoice</a>` : 'N/A'}</li>
       </ul>
 
       <h3 style="color: #428bca;">Feedback Details:</h3>
@@ -115,11 +121,13 @@ exports.sendReviewEmail = async (reviewDetails) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent: %s', info.messageId);
-    console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // Only for ethereal.email testing
+    console.log('Review Email sent: %s', info.messageId);
+    // console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // Only for ethereal.email testing
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending review email:', error);
     // In a real application, you might log this error to a monitoring service
     // or implement a retry mechanism.
   }
 };
+
+module.exports = { sendEmail, sendReviewEmail: exports.sendReviewEmail }; // Export both functions

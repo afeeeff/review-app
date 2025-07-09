@@ -14,11 +14,15 @@ const PORT = process.env.PORT || 5000; // Default to port 5000 if not specified 
 // --- Import Routes ---
 const authRoutes = require('./routes/authRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const superuserRoutes = require('./routes/superuserRoutes');
+const companyRoutes = require('./routes/companyRoutes');
+const branchRoutes = require('./routes/branchRoutes'); // NEW: Import branch routes
 
 // --- Middleware ---
-// Enable CORS for all origins.
+// Enable CORS for all origins. In a production app, you might restrict this to your frontend URL.
+// For development, allowing all origins is fine.
 app.use(cors());
-// Parse JSON request bodies (for non-file data)
+// Parse JSON request bodies
 app.use(express.json());
 
 // --- MongoDB Connection ---
@@ -34,8 +38,11 @@ app.get('/', (req, res) => {
 });
 
 // --- Use API Routes ---
-app.use('/api/client', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/superuser', superuserRoutes);
+app.use('/api/company', companyRoutes);
+app.use('/api/branch', branchRoutes); // NEW: Use branch routes
 
 // --- Multer Error Handling Middleware ---
 // This middleware must be placed AFTER all routes that use multer

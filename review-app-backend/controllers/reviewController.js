@@ -7,6 +7,7 @@ const { SpeechClient } = require('@google-cloud/speech'); // Import Speech-to-Te
 const { TranslationServiceClient } = require('@google-cloud/translate').v3beta1; // Import Translation API
 const path = require('path');
 const emailService = require('../services/emailService'); // Import the new email service
+const mongoose = require('mongoose'); // Import mongoose for ObjectId
 
 // Initialize Google Cloud Storage client
 const storage = new Storage({
@@ -110,7 +111,7 @@ const extractInvoiceData = (text) => {
 // Controller for processing invoice upload and extracting data
 exports.processInvoice = async (req, res) => {
   try {
-    const { clientId } = req; // From JWT middleware
+    const clientId = req.user.id; // From JWT middleware
     const file = req.file;
 
     if (!file) {
@@ -127,7 +128,6 @@ exports.processInvoice = async (req, res) => {
         metadata: {
           contentType: file.mimetype,
         },
-        // REMOVED: predefinedAcl property to avoid legacy ACL errors
       });
 
       stream.on('error', (err) => {
@@ -204,10 +204,12 @@ exports.processInvoice = async (req, res) => {
 };
 
 
-// Controller for submitting a new review (updated to accept invoice data)
+// Controller for submitting a new review (updated to accept invoice data and company/branch IDs)
 exports.submitReview = async (req, res) => {
   try {
-    const { clientId } = req; // From JWT middleware
+    const clientId = req.user.id; // From JWT middleware
+    const companyId = req.user.company; // Get company ID from authenticated user's token
+    const branchId = req.user.branch;   // Get branch ID from authenticated user's token
 
     // Get review data and invoice data from req.body
     const {
@@ -216,16 +218,23 @@ exports.submitReview = async (req, res) => {
       customerName,
       customerMobile,
       invoiceFileUrl,
-      invoiceData,
+      invoiceData: invoiceDataString, // Received as string, parse it
       sourceLanguage
     } = req.body;
+
+    const voiceAudioFile = req.file; // This is the voice audio file from multer
 
     let voiceData = null;
     let transcribedText = null; // Initialize transcribedText
 
+    let finalInvoiceData = {};
+    if (invoiceDataString) {
+      finalInvoiceData = JSON.parse(invoiceDataString);
+    }
+
     // Handle voice audio upload to GCS if a file is present (for voice review)
-    if (req.file) { // This req.file is for the voice audio, not the invoice
-      const file = req.file;
+    if (voiceAudioFile) { // This req.file is for the voice audio, not the invoice
+      const file = voiceAudioFile; // Use voiceAudioFile here
 
       // NEW LOGS: Inspect the audio file buffer before GCS upload
       console.log(`Audio file received: name=${file.originalname}, mimetype=${file.mimetype}, size=${file.size} bytes`);
@@ -248,7 +257,6 @@ exports.submitReview = async (req, res) => {
           metadata: {
             contentType: 'audio/wav', // Explicitly set content type to audio/wav
           },
-          // REMOVED: predefinedAcl property to avoid legacy ACL errors
         });
 
         stream.on('error', (err) => {
@@ -334,17 +342,89 @@ exports.submitReview = async (req, res) => {
       console.log('No voice audio file uploaded.');
     }
 
-    // Now save the review to DB after voice upload (if any) and transcription are complete
-    await saveReviewToDb(res, {
-      clientId,
-      rating,
-      textReview,
+    // Determine feedback type based on rating
+    let feedbackType;
+    if (parseInt(rating) >= 9) {
+      feedbackType = 'positive';
+    } else if (parseInt(rating) >= 6) {
+      feedbackType = 'neutral';
+    } else {
+      feedbackType = 'negative';
+    }
+
+    // Ensure invoiceData is an object and add customerName/Mobile to it
+    const updatedInvoiceData = { ...finalInvoiceData };
+    
+    // Override or set customerNameFromInvoice and customerMobileFromInvoice with the final values
+    updatedInvoiceData.customerNameFromInvoice = customerName;
+    updatedInvoiceData.customerMobileFromInvoice = customerMobile;
+
+    // Validate and format invoiceDate for consistency
+    if (updatedInvoiceData.invoiceDate) {
+      const dateParts = updatedInvoiceData.invoiceDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (dateParts) {
+        // If it matches DD/MM/YYYY, keep it as is
+        updatedInvoiceData.invoiceDate = `${dateParts[1]}/${dateParts[2]}/${dateParts[3]}`;
+      } else {
+        // Attempt to parse if it contains time or other variations
+        const parsedDate = new Date(updatedInvoiceData.invoiceDate);
+        if (!isNaN(parsedDate.getTime())) {
+          // Format to DD/MM/YYYY
+          const day = String(parsedDate.getDate()).padStart(2, '0');
+          const month = String(parsedDate.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+          const year = parsedDate.getFullYear();
+          updatedInvoiceData.invoiceDate = `${day}/${month}/${year}`;
+        } else {
+          // If parsing fails, set to null
+          updatedInvoiceData.invoiceDate = null;
+          console.warn(`Invalid invoice date format received: ${finalInvoiceData.invoiceDate}. Setting to null.`);
+        }
+      }
+    }
+
+
+    console.log('Saving review to DB. Customer Name:', customerName, 'Customer Mobile:', customerMobile);
+    console.log('Final Invoice Data being saved:', updatedInvoiceData);
+
+    const newReview = new Review({
+      client: clientId, // Use 'client' field now
+      company: companyId, // Save company ID from token
+      branch: branchId,   // Save branch ID from token
       customerName,
       customerMobile,
-      voiceData, // This will now correctly contain the GCS URL or null
+      rating: parseInt(rating),
+      voiceData, // This is where the GCS URL will be stored
+      textReview: textReview || (voiceAudioFile ? null : (parseInt(rating) >= 9 && !voiceData ? 'Excellent service!' : null)), // FIX: Use voiceData instead of voiceAudioFile
+      transcribedText, // This holds the potentially translated text
       invoiceFileUrl,
-      invoiceData: invoiceData ? JSON.parse(invoiceData) : null,
-      transcribedText // Assuming this already holds the potentially translated text as per your current logic
+      invoiceData: updatedInvoiceData,
+      feedbackType,
+    });
+
+    await newReview.save();
+    console.log(`Review saved: ${newReview._id}. Voice URL: ${newReview.voiceData}. Invoice URL: ${newReview.invoiceFileUrl}. Transcribed Text: ${newReview.transcribedText}`);
+
+    // --- NEW: Email Trigger for ratings 1-8 ---
+    if (parseInt(rating) >= 1 && parseInt(rating) <= 8) {
+      console.log(`Rating is ${rating}, triggering email notification.`);
+      await emailService.sendReviewEmail({
+        rating: parseInt(rating),
+        transcribedText: transcribedText,
+        voiceAudioUrl: voiceData || '',
+        invoiceData: updatedInvoiceData,
+        customerName: customerName,
+        customerMobile: customerMobile,
+      });
+    }
+    // --- END NEW EMAIL TRIGGER ---
+
+    res.status(201).json({
+      message: 'Review submitted successfully!',
+      reviewId: newReview._id,
+      voiceFileUrl: newReview.voiceData,
+      invoiceFileUrl: newReview.invoiceFileUrl,
+      invoiceData: newReview.invoiceData,
+      transcribedText: newReview.transcribedText
     });
   } catch (error) {
     console.error('Error submitting review (top-level catch):');
@@ -362,109 +442,47 @@ exports.submitReview = async (req, res) => {
 };
 
 
-// Helper function to save review to database
-const saveReviewToDb = async (res, reviewData) => {
-  try {
-    // Determine feedback type based on rating
-    let feedbackType;
-    if (parseInt(reviewData.rating) >= 9) {
-      feedbackType = 'positive';
-    } else if (parseInt(reviewData.rating) >= 6) {
-      feedbackType = 'neutral';
-    } else {
-      feedbackType = 'negative';
-    }
-
-    // Ensure invoiceData is an object and add customerName/Mobile to it
-    const finalInvoiceData = { ...reviewData.invoiceData };
-    
-    // Override or set customerNameFromInvoice and customerMobileFromInvoice with the final values
-    finalInvoiceData.customerNameFromInvoice = reviewData.customerName;
-    finalInvoiceData.customerMobileFromInvoice = reviewData.customerMobile;
-
-    // Validate and format invoiceDate for consistency
-    if (finalInvoiceData.invoiceDate) {
-      const dateParts = finalInvoiceData.invoiceDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if (dateParts) {
-        // If it matches DD/MM/YYYY, keep it as is
-        finalInvoiceData.invoiceDate = `${dateParts[1]}/${dateParts[2]}/${dateParts[3]}`;
-      } else {
-        // Attempt to parse if it contains time or other variations
-        const parsedDate = new Date(finalInvoiceData.invoiceDate);
-        if (!isNaN(parsedDate.getTime())) {
-          // Format to DD/MM/YYYY
-          const day = String(parsedDate.getDate()).padStart(2, '0');
-          const month = String(parsedDate.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-          const year = parsedDate.getFullYear();
-          finalInvoiceData.invoiceDate = `${day}/${month}/${year}`;
-        } else {
-          // If parsing fails, set to null
-          finalInvoiceData.invoiceDate = null;
-          console.warn(`Invalid invoice date format received: ${reviewData.invoiceData.invoiceDate}. Setting to null.`);
-        }
-      }
-    }
-
-
-    console.log('Saving review to DB. Customer Name:', reviewData.customerName, 'Customer Mobile:', reviewData.customerMobile);
-    console.log('Final Invoice Data being saved:', finalInvoiceData);
-
-    const newReview = new Review({
-      clientId: reviewData.clientId,
-      customerName: reviewData.customerName,
-      customerMobile: reviewData.customerMobile,
-      rating: parseInt(reviewData.rating),
-      voiceData: reviewData.voiceData, // This is where the GCS URL will be stored
-      textReview: reviewData.textReview || (parseInt(reviewData.rating) >= 9 && !reviewData.voiceData ? 'Excellent service!' : null),
-      transcribedText: reviewData.transcribedText,
-      invoiceFileUrl: reviewData.invoiceFileUrl,
-      invoiceData: finalInvoiceData,
-      feedbackType,
-    });
-
-    await newReview.save();
-    console.log(`Review saved: ${newReview._id}. Voice URL: ${newReview.voiceData}. Invoice URL: ${newReview.invoiceFileUrl}. Transcribed Text: ${newReview.transcribedText}`);
-
-    // --- NEW: Email Trigger for ratings 1-8 ---
-    // Assuming 'transcribedText' in your current code is already the desired text (potentially translated)
-    // to be sent in the email.
-    if (parseInt(reviewData.rating) >= 1 && parseInt(reviewData.rating) <= 8) {
-      console.log(`Rating is ${reviewData.rating}, triggering email notification.`);
-      await emailService.sendReviewEmail({
-        rating: parseInt(reviewData.rating),
-        transcribedText: reviewData.transcribedText, // Use the existing transcribedText
-        translatedText: reviewData.transcribedText, // Assuming translated is same as transcribed for now
-        voiceAudioUrl: reviewData.voiceData || '', // Ensure it's not null
-        invoiceData: finalInvoiceData,
-        customerName: reviewData.customerName,
-        customerMobile: reviewData.customerMobile,
-      });
-    }
-    // --- END NEW EMAIL TRIGGER ---
-
-    res.status(201).json({
-      message: 'Review submitted successfully!',
-      reviewId: newReview._id,
-      voiceFileUrl: newReview.voiceData,
-      invoiceFileUrl: newReview.invoiceFileUrl,
-      invoiceData: newReview.invoiceData,
-      transcribedText: newReview.transcribedText
-    });
-  } catch (dbError) {
-    console.error('MongoDB Save Error:', dbError);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Failed to save review to database.', error: dbError.message });
-    }
-  }
-};
-
-
 // Controller for fetching reviews for a specific client
 exports.getClientReviews = async (req, res) => {
   try {
-    const { clientId } = req; // From JWT middleware
+    const authenticatedClientId = req.user.id; // Get authenticated client ID from token
+    const requestedClientId = req.params.clientId; // Client ID from URL
+    const { startDate, endDate } = req.query;
 
-    const reviews = await Review.find({ clientId: clientId }).sort({ createdAt: -1 });
+    // Ensure the authenticated client is requesting their own reviews
+    if (authenticatedClientId.toString() !== requestedClientId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to view these reviews.' });
+    }
+
+    let query = { client: authenticatedClientId };
+
+    // Add date filtering to the query
+    if (startDate || endDate) {
+      query.createdAt = {}; // Initialize createdAt as an object for range queries
+      if (startDate) {
+        // Convert startDate (YYYY-MM-DD) to the beginning of the day in UTC
+        // Use setUTCHours to ensure it's the start of the day in UTC, avoiding timezone issues
+        const startOfDay = new Date(startDate);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        query.createdAt.$gte = startOfDay;
+      }
+      if (endDate) {
+        // Convert endDate (YYYY-MM-DD) to the end of the day in UTC
+        // Add one day and then subtract one millisecond to get to the end of the day in UTC
+        const endOfDay = new Date(endDate);
+        endOfDay.setUTCHours(23, 59, 59, 999); // Set to end of the day
+        query.createdAt.$lte = endOfDay;
+      }
+    }
+
+    // Fetch reviews for the authenticated client, populating company and branch details
+    // FIX: Use the constructed 'query' object here
+    const reviews = await Review.find(query)
+      .populate('client', 'email')
+      .populate('company', 'name') // Populate company name
+      .populate('branch', 'name')   // Populate branch name
+      .sort({ createdAt: -1 });
+
     res.status(200).json(reviews);
   } catch (error) {
     console.error('Error fetching client reviews:', error);

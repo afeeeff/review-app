@@ -3,47 +3,80 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs'); // For password hashing
-
-// Dummy client data for demonstration. In a real app, this would come from MongoDB.
-const dummyClients = [
-  // IMPORTANT: Replace the 'passwordHash' below with the EXACT hash you generated for '123'
-  { id: 'client123', username: 'client1', passwordHash: '$2b$10$IZd1MU3a/JRTM.xabuV3Ae5Ea4RGYhAsp5yBmm5dsqzCEA1EWym.y' },
-  { id: 'client456', username: 'client2', passwordHash: '$2a$10$Q7w5W1v.H6F.o.N.O.E.O.u.B.m.K.L.P.S.T.U.V.W.X.Y.Z.0.1.2.3.4.5.6.7.8.9' }, // Hashed 'password123'
-];
+const User = require('../models/User'); // Import the new User model
+const bcrypt = require('bcryptjs');
+const authController = require('../controllers/authController'); // Import authController
 
 // Helper function to generate JWT
-const generateToken = (id) => {
-  return jwt.sign({ clientId: id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  });
+// Now includes role, companyId, and branchId in the token payload
+const generateToken = (id, role, companyId = null, branchId = null) => {
+  return jwt.sign(
+    { id, role, companyId, branchId }, // Include role, companyId, branchId in payload
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN }
+  );
 };
 
-// Client Login Route
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+// @desc    Register a new user (for initial superuser setup or future admin creation)
+// @route   POST /api/auth/register
+// @access  Public (for initial superuser, then restricted by superuser/company/branch admin)
+router.post('/register', async (req, res) => {
+  const { email, password, role, company, branch } = req.body;
 
-  // Find dummy client (in real app, query MongoDB)
-  const client = dummyClients.find(c => c.username === username);
+  try {
+    // Check if user already exists
+    const userExists = await User.findOne({ email });
 
-  if (client) {
-    // Compare provided password with hashed password
-    const isMatch = await bcrypt.compare(password, client.passwordHash);
+    if (userExists) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
 
-    if (isMatch) {
-      // If credentials are valid, generate a token
-      const token = generateToken(client.id);
-      res.status(200).json({
-        message: 'Login successful',
-        clientId: client.id,
-        token: token, // Send the JWT to the frontend
+    // Create new user
+    const user = await User.create({
+      email,
+      password, // Mongoose pre-save hook will hash this
+      role,
+      company: company || null, // Will be ObjectId or null
+      branch: branch || null   // Will be ObjectId or null
+    });
+
+    if (user) {
+      // Generate token with new role-based payload
+      const token = generateToken(user._id, user.role, user.company, user.branch);
+
+      res.status(201).json({
+        message: 'User registered successfully',
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        companyId: user.company,
+        branchId: user.branch,
+        token: token,
       });
     } else {
-      res.status(401).json({ message: 'Invalid credentials' });
+      res.status(400).json({ message: 'Invalid user data' });
     }
-  } else {
-    res.status(401).json({ message: 'Invalid credentials' });
+  } catch (error) {
+    console.error('User registration error:', error);
+    res.status(500).json({ message: 'Server error during registration', error: error.message });
   }
 });
+
+
+// @desc    Authenticate user & get token
+// @route   POST /api/auth/login
+// @access  Public
+router.post('/login', authController.login); // Use the controller function
+
+// @desc    Request password reset OTP
+// @route   POST /api/auth/request-password-reset-otp
+// @access  Public
+router.post('/request-password-reset-otp', authController.requestPasswordResetOTP);
+
+// @desc    Reset password with OTP
+// @route   POST /api/auth/reset-password-with-otp
+// @access  Public
+router.post('/reset-password-with-otp', authController.resetPasswordWithOTP);
+
 
 module.exports = router;

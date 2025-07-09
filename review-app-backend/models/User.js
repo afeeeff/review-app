@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs'); // For password hashing
 
 const UserSchema = new mongoose.Schema({
+
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -34,6 +35,14 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Branch',
     default: null // Superuser and Company Admin will not have a branch
+  },
+   customerName: { // Only applicable if role is 'client'
+    type: String,
+    default: null
+  },
+  customerMobile: { // Only applicable if role is 'client'
+    type: String,
+    default: null
   },
   // Fields for password reset (OTP functionality)
   resetPasswordToken: String,

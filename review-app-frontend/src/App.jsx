@@ -36,8 +36,9 @@ const App = () => {
   const [feedbackType, setFeedbackType] = useState('');
   // State to store the logged-in client's ID (important for fetching their reviews)
   const [clientId, setClientId] = useState(null);
-  // State to store the JWT token
+  // State to store the JWT token and full user data
   const [token, setToken] = useState(localStorage.getItem('jwtToken')); // Initialize from localStorage
+  const [userData, setUserData] = useState(null); // To store full user data including companyId, branchId
 
   // NEW STATE: For selected spoken language
   const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Default to English (US)
@@ -57,12 +58,29 @@ const App = () => {
   // Base URL for your backend API
   const API_BASE_URL = 'http://localhost:5000/api'; // Make sure this matches your backend port
 
-  // Effect to check for token on component mount and set initial view
+  // Effect to check for token and user data on component mount and set initial view
   useEffect(() => {
-    if (token) {
-      const decodedToken = JSON.parse(atob(token.split('.')[1]));
-      setClientId(decodedToken.clientId);
-      setCurrentView('dashboard');
+    const storedToken = localStorage.getItem('jwtToken');
+    const storedUserData = localStorage.getItem('clientUserData'); // NEW: Get stored user data
+
+    if (storedToken && storedUserData) {
+      try {
+        const parsedUserData = JSON.parse(storedUserData);
+        // Ensure clientId is set from parsedUserData, which should now contain 'clientId'
+        setClientId(parsedUserData.clientId);
+        setToken(storedToken);
+        setUserData(parsedUserData); // Set full user data
+        setCurrentView('dashboard');
+      } catch (error) {
+        console.error('Failed to parse stored user data:', error);
+        // Clear invalid data if parsing fails
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('clientUserData');
+        setToken(null);
+        setClientId(null);
+        setUserData(null);
+        setCurrentView('login');
+      }
     }
   }, []);
 
@@ -80,20 +98,26 @@ const App = () => {
     e.preventDefault();
     setLoginError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/client/login`, {
+      // Changed endpoint from /api/client/login to /api/auth/login
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email: username, password }), // Use 'email' for backend
       });
 
       const data = await parseResponse(response);
 
       if (response.ok) {
-        setClientId(data.clientId);
+        // FIX: Use data._id from the backend response as clientId
+        setClientId(data._id);
         setToken(data.token);
+        // Store full user data including role, companyId, branchId,
+        // and explicitly add clientId based on data._id for consistency in localStorage
         localStorage.setItem('jwtToken', data.token);
+        localStorage.setItem('clientUserData', JSON.stringify({ ...data, clientId: data._id }));
+        setUserData({ ...data, clientId: data._id }); // Update userData state with clientId
         setCurrentView('dashboard');
       } else {
         setLoginError(data.message || 'Login failed. Please try again.');
@@ -108,7 +132,9 @@ const App = () => {
   const handleLogout = () => {
     setToken(null);
     setClientId(null);
+    setUserData(null); // Clear full user data
     localStorage.removeItem('jwtToken');
+    localStorage.removeItem('clientUserData'); // Clear stored user data
     setCurrentView('login');
     setUsername('');
     setPassword('');
@@ -197,36 +223,35 @@ const App = () => {
 
   // Function to handle confirmation of extracted details and proceed to review
   const handleConfirmDetailsAndProceed = () => {
-  const invoiceDate = extractedInvoiceData?.invoiceDate || '';
-  const isValidDateFormat = /^\d{2}\/\d{2}\/\d{4}$/.test(invoiceDate);
+    const invoiceDate = extractedInvoiceData?.invoiceDate || '';
+    const isValidDateFormat = /^\d{2}\/\d{2}\/\d{4}$/.test(invoiceDate);
 
-  if (!isValidDateFormat) {
-    setInvoiceDateError('Date must be in DD/MM/YYYY format.');
-    return;
-  } else {
-    setInvoiceDateError('');
-  }
+    if (!isValidDateFormat) {
+      setInvoiceDateError('Date must be in DD/MM/YYYY format.');
+      return;
+    } else {
+      setInvoiceDateError('');
+    }
 
-  if (!customerName.trim() || !customerMobile.trim()) {
-    setCustomerDetailsError('Customer name and mobile must be present (extracted or manually entered).');
-    return;
-  }
+    if (!customerName.trim() || !customerMobile.trim()) {
+      setCustomerDetailsError('Customer name and mobile must be present (extracted or manually entered).');
+      return;
+    }
 
-  if (!/^\d{10}$/.test(customerMobile.trim())) {
-    setCustomerDetailsError('Please enter a valid 10-digit mobile number.');
-    return;
-  }
+    if (!/^\d{10}$/.test(customerMobile.trim())) {
+      setCustomerDetailsError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
 
-  setCustomerDetailsError('');
-  setCurrentView('customerReview');
-  setCustomerRating(0);
-  setShowVoicePrompt(false);
-  setSubmissionMessage('');
-  setFeedbackType('');
-  setAudioBlob(null);
-  setRecordingError('');
-};
-
+    setCustomerDetailsError('');
+    setCurrentView('customerReview');
+    setCustomerRating(0);
+    setShowVoicePrompt(false);
+    setSubmissionMessage('');
+    setFeedbackType('');
+    setAudioBlob(null);
+    setRecordingError('');
+  };
 
 
   // Function to handle navigation to the Reviews Dashboard page
@@ -269,46 +294,7 @@ const App = () => {
     }
   };
 
-  // --- WAV Encoding Utility ---
-  // This function creates a WAV Blob from raw audio data
-  const encodeWAV = (samples, sampleRate) => {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
-
-    // Write WAV header
-    // RIFF identifier
-    writeString(view, 0, 'RIFF');
-    // file length
-    view.setUint32(4, 36 + samples.length * 2, true);
-    // RIFF type
-    writeString(view, 8, 'WAVE');
-    // format chunk identifier
-    writeString(view, 12, 'fmt ');
-    // format chunk length
-    view.setUint32(16, 16, true);
-    // sample format (1 for PCM)
-    view.setUint16(20, 1, true);
-    // channel count
-    view.setUint16(22, 1, true); // Mono
-    // sample rate
-    view.setUint32(24, sampleRate, true);
-    // byte rate (sample rate * block align)
-    view.setUint32(28, sampleRate * 2, true); // 1 channel * 2 bytes/sample
-    // block align (channel count * bytes per sample)
-    view.setUint16(32, 2, true); // 1 channel * 2 bytes/sample
-    // bits per sample
-    view.setUint16(34, 16, true); // 16-bit PCM
-    // data chunk identifier
-    writeString(view, 36, 'data');
-    // data chunk length
-    view.setUint32(40, samples.length * 2, true);
-
-    // Write the PCM samples
-    floatTo16BitPCM(view, 44, samples);
-
-    return new Blob([view], { type: 'audio/wav' });
-  };
-
+  // --- WAV Encoding Utility (Improved) ---
   const writeString = (view, offset, string) => {
     for (let i = 0; i < string.length; i++) {
       view.setUint8(offset + i, string.charCodeAt(i));
@@ -321,6 +307,46 @@ const App = () => {
       output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
     }
   };
+
+  const encodeWAV = (samples, sampleRate) => {
+    const numChannels = 1; // Mono
+    const bytesPerSample = 2; // 16-bit PCM
+
+    const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+    const view = new DataView(buffer);
+
+    /* RIFF identifier */
+    writeString(view, 0, 'RIFF');
+    /* file length */
+    view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+    /* RIFF type */
+    writeString(view, 8, 'WAVE');
+    /* format chunk identifier */
+    writeString(view, 12, 'fmt ');
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (1 for PCM) */
+    view.setUint16(20, 1, true);
+    /* channel count */
+    view.setUint16(22, numChannels, true);
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate (sample rate * block align) */
+    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+    /* block align (channel count * bytes per sample) */
+    view.setUint16(32, numChannels * bytesPerSample, true);
+    /* bits per sample */
+    view.setUint16(34, bytesPerSample * 8, true);
+    /* data chunk identifier */
+    writeString(view, 36, 'data');
+    /* data chunk length */
+    view.setUint32(40, samples.length * bytesPerSample, true);
+
+    floatTo16BitPCM(view, 44, samples);
+
+    return new Blob([view], { type: 'audio/wav' });
+  };
+
 
   // --- Voice Recording Functions (using Web Audio API) ---
   const startRecording = async () => {
@@ -361,6 +387,8 @@ const App = () => {
       audioStreamRef.current = stream; // Store the stream reference
 
       // Create nodes and connect them
+      // Using ScriptProcessorNode is deprecated, but for simplicity and direct control over raw audio, it's used here.
+      // For production, consider AudioWorkletNode.
       mediaStreamSourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
       scriptProcessorNodeRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
@@ -526,6 +554,15 @@ const App = () => {
       formData.append('customerMobile', customerMobile); // Use the mobile from state (extracted or manually entered)
       formData.append('sourceLanguage', selectedLanguage); // NEW: Send selected language to backend
 
+      // NEW: Append companyId and branchId from userData
+      if (userData?.companyId) {
+        formData.append('companyId', userData.companyId);
+      }
+      if (userData?.branchId) {
+        formData.append('branchId', userData.branchId);
+      }
+
+
       if (voiceAudioBlob) {
         // Voice audio is now always WAV
         formData.append('voiceAudio', voiceAudioBlob, `voice_review_${Date.now()}.wav`);
@@ -568,13 +605,10 @@ const App = () => {
       if (response.ok) {
         if (rating >= 9) {
           setSubmissionMessage('Thank you for your excellent feedback! We appreciate your high rating.');
-          setFeedbackType('positive');
         } else if (rating >= 6) {
           setSubmissionMessage('Thank you for your feedback! We are always striving to improve.');
-          setFeedbackType('neutral');
         } else {
           setSubmissionMessage('Thank you for your feedback. We are sorry to hear about your experience and will use your input to improve.');
-          setFeedbackType('negative');
         }
         setCurrentView('submissionSuccess');
       } else {
@@ -714,480 +748,491 @@ const App = () => {
       setCurrentView('login');
     }
 
-    switch (currentView) {
-      case 'login':
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
-            <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-500 hover:scale-105">
-              <h2 className="text-4xl font-extrabold text-center text-gray-900 mb-8 tracking-wide">Client Login</h2>
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div>
-                  <label htmlFor="username" className="block text-base font-medium text-gray-700 mb-2">Username</label>
-                  <input
-                    type="text"
-                    id="username"
-                    className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="password" className="block text-base font-medium text-gray-700 mb-2">Password</label>
-                  <input
-                    type="password"
-                    id="password"
-                    className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                {loginError && (
-                  <p className="text-red-600 text-sm font-medium text-center -mt-2">{loginError}</p>
-                )}
-                <button
-                  type="submit"
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform transition-all duration-300 ease-in-out hover:scale-105"
-                >
-                  Login
-                </button>
-              </form>
-            </div>
-          </div>
-        );
+    return (
+      <>
+        {/* Tailwind CSS CDN - Always include this for Tailwind to work */}
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+        {/* Google Fonts - Inter */}
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-      case 'dashboard':
-        return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-green-400 to-teal-600 p-4">
-            <h2 className="text-5xl font-extrabold text-center text-white mb-12 drop-shadow-lg">Client Dashboard</h2>
-            <div className="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-10 w-full max-w-4xl">
-              <button
-                onClick={goToInvoiceUpload} // Changed to goToInvoiceUpload
-                className="flex-1 bg-gradient-to-br from-yellow-400 to-orange-500 text-white py-10 px-8 rounded-3xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-400 ease-in-out flex flex-col items-center justify-center text-center border-4 border-yellow-200 hover:border-orange-300"
-              >
-                <span className="text-8xl mb-4 animate-bounce-slow">📝</span> {/* Animated Emoji */}
-                <span className="text-3xl font-bold tracking-wide">Customer Review</span>
-              </button>
-              <button
-                onClick={goToReviewsDashboard}
-                className="flex-1 bg-gradient-to-br from-purple-500 to-pink-600 text-white py-10 px-8 rounded-3xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-400 ease-in-out flex flex-col items-center justify-center text-center border-4 border-purple-300 hover:border-pink-400"
-              >
-                <span className="text-8xl mb-4 animate-pulse-slow">📊</span> {/* Animated Emoji */}
-                <span className="text-3xl font-bold tracking-wide">Reviews Dashboard</span>
-              </button>
-            </div>
+        {/* Custom CSS for animations (Tailwind doesn't have these by default) */}
+        <style>
+          {`
+          @keyframes bounce-slow {
+            0%, 100% {
+              transform: translateY(0);
+            }
+            50% {
+              transform: translateY(-15px);
+            }
+          }
 
-            <button
-              onClick={handleLogout}
-              className="mt-16 px-8 py-4 bg-red-600 text-white rounded-xl shadow-lg hover:bg-red-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
-            >
-              Logout
-            </button>
-          </div>
-        );
+          .animate-bounce-slow {
+            animation: bounce-slow 3s infinite ease-in-out;
+          }
 
-      case 'invoiceUpload':
-        return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-purple-600 p-4">
-            <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Upload Invoice for Details</h2>
-            <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-500 hover:scale-105">
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="invoiceFile" className="block text-base font-medium text-gray-700 mb-2">
-                    Select Invoice (PDF, JPG, PNG)
-                  </label>
-                  <input
-                    type="file"
-                    id="invoiceFile"
-                    accept=".pdf, .jpg, .jpeg, .png"
-                    className="mt-1 block w-full text-lg text-gray-900 file:mr-4 file:py-2 file:px-4
-                      file:rounded-full file:border-0 file:text-sm file:font-semibold
-                      file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    onChange={handleInvoiceFileChange}
-                  />
+          @keyframes pulse-slow {
+            0%, 100% {
+              transform: scale(1);
+              opacity: 1;
+            }
+            50% {
+              transform: scale(1.05);
+              opacity: 0.8;
+            }
+          }
+
+          .animate-pulse-slow {
+            animation: pulse-slow 3s infinite ease-in-out;
+          }
+
+          @keyframes fade-in {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+
+          .animate-fade-in {
+            animation: fade-in 0.8s ease-out forwards;
+          }
+
+          @keyframes bounce-once {
+            0%, 100% {
+              transform: translateY(0);
+            }
+            20% {
+              transform: translateY(-20px);
+            }
+            40% {
+              transform: translateY(0);
+            }
+            60% {
+              transform: translateY(-10px);
+            }
+            80% {
+              transform: translateY(0);
+            }
+          }
+
+          .animate-bounce-once {
+            animation: bounce-once 1.2s ease-out;
+          }
+          `}
+        </style>
+
+        {(() => { // Using an IIFE to handle the switch logic
+          switch (currentView) {
+            case 'login':
+              return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
+                  <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-500 hover:scale-105">
+                    <h2 className="text-4xl font-extrabold text-center text-gray-900 mb-8 tracking-wide">Client Login</h2>
+                    <form onSubmit={handleLogin} className="space-y-6">
+                      <div>
+                        <label htmlFor="username" className="block text-base font-medium text-gray-700 mb-2">Email</label> {/* Changed to Email */}
+                        <input
+                          type="email" // Changed to type email
+                          id="username"
+                          className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="password" className="block text-base font-medium text-gray-700 mb-2">Password</label>
+                        <input
+                          type="password"
+                          id="password"
+                          className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                      {loginError && (
+                        <p className="text-red-600 text-sm font-medium text-center -mt-2">{loginError}</p>
+                      )}
+                      <button
+                        type="submit"
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                      >
+                        Login
+                      </button>
+                    </form>
+                  </div>
                 </div>
-                {invoiceProcessingError && (
-                  <p className="text-red-600 text-sm font-medium text-center">{invoiceProcessingError}</p>
-                )}
-                {!extractedInvoiceData && (
+              );
+
+            case 'dashboard':
+              return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-green-400 to-teal-600 p-4">
+                  <h2 className="text-5xl font-extrabold text-center text-white mb-12 drop-shadow-lg">Client Dashboard</h2>
+                  <div className="flex flex-col md:flex-row space-y-8 md:space-y-0 md:space-x-10 w-full max-w-4xl">
+                    <button
+                      onClick={goToInvoiceUpload} // Changed to goToInvoiceUpload
+                      className="flex-1 bg-gradient-to-br from-yellow-400 to-orange-500 text-white py-10 px-8 rounded-3xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-400 ease-in-out flex flex-col items-center justify-center text-center border-4 border-yellow-200 hover:border-orange-300"
+                    >
+                      <span className="text-8xl mb-4 animate-bounce-slow">📝</span> {/* Animated Emoji */}
+                      <span className="text-3xl font-bold tracking-wide">Customer Review</span>
+                    </button>
+                    <button
+                      onClick={goToReviewsDashboard}
+                      className="flex-1 bg-gradient-to-br from-purple-500 to-pink-600 text-white py-10 px-8 rounded-3xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-400 ease-in-out flex flex-col items-center justify-center text-center border-4 border-purple-300 hover:border-pink-400"
+                    >
+                      <span className="text-8xl mb-4 animate-pulse-slow">📊</span> {/* Animated Emoji */}
+                      <span className="text-3xl font-bold tracking-wide">Reviews Dashboard</span>
+                    </button>
+                  </div>
+
                   <button
-                    onClick={handleProcessInvoice}
-                    disabled={!invoiceFile || isProcessingInvoice}
-                    className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-green-600 to-teal-700 hover:from-green-700 hover:to-teal-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                    onClick={handleLogout}
+                    className="mt-16 px-8 py-4 bg-red-600 text-white rounded-xl shadow-lg hover:bg-red-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
                   >
-                    {isProcessingInvoice ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5 text-white mr-3" viewBox="0 0 24 24">
+                    Logout
+                  </button>
+                </div>
+              );
+
+            case 'invoiceUpload':
+              return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-purple-600 p-4">
+                  <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Upload Invoice for Details</h2>
+                  <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-500 hover:scale-105">
+                    <div className="space-y-6">
+                      <div>
+                        <label htmlFor="invoiceFile" className="block text-base font-medium text-gray-700 mb-2">
+                          Select Invoice (PDF, JPG, PNG)
+                        </label>
+                        <input
+                          type="file"
+                          id="invoiceFile"
+                          accept=".pdf, .jpg, .jpeg, .png"
+                          className="mt-1 block w-full text-lg text-gray-900 file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0 file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          onChange={handleInvoiceFileChange}
+                        />
+                      </div>
+                      {invoiceProcessingError && (
+                        <p className="text-red-600 text-sm font-medium text-center">{invoiceProcessingError}</p>
+                      )}
+                      {!extractedInvoiceData && (
+                        <button
+                          onClick={handleProcessInvoice}
+                          disabled={!invoiceFile || isProcessingInvoice}
+                          className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-green-600 to-teal-700 hover:from-green-700 hover:to-teal-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                        >
+                          {isProcessingInvoice ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5 text-white mr-3" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Processing Invoice...
+                            </>
+                          ) : (
+                            'Upload & Extract Details'
+                          )}
+                        </button>
+                      )}
+
+                      {extractedInvoiceData && (
+                        <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+                          <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">Extracted Invoice Details</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
+                            <div className="col-span-1">
+                              <p className="font-semibold text-gray-700">Job Card Number:</p>
+                              <input
+                                type="text"
+                                value={extractedInvoiceData.jobCardNumber || ''}
+                                onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, jobCardNumber: e.target.value }))}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="N/A"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <p className="font-semibold text-gray-700">Invoice Number:</p>
+                              <input
+                                type="text"
+                                value={extractedInvoiceData.invoiceNumber || ''}
+                                onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="N/A"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <p className="font-semibold text-gray-700">Invoice Date:</p>
+                              <input
+                                type="text"
+                                value={extractedInvoiceData.invoiceDate || ''}
+                                onChange={(e) => {
+                                  const newDate = e.target.value;
+                                  const isValid = /^\d{2}\/\d{2}\/\d{4}$/.test(newDate);
+                                  setExtractedInvoiceData(prev => ({ ...prev, invoiceDate: newDate }));
+                                  setInvoiceDateError(isValid || newDate === '' ? '' : 'Date must be in DD/MM/YYYY format.');
+                                }}
+                                pattern="\d{2}/\d{2}/\d{4}" // Client-side validation pattern
+                                title="Please enter date in DD/MM/YYYY format"
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="N/A"
+                              />
+                              {invoiceDateError && (
+                                <p className="text-red-600 text-sm font-medium mt-1">{invoiceDateError}</p>
+                              )}
+
+                            </div>
+                            <div className="col-span-1">
+                              <p className="font-semibold text-gray-700">VIN:</p>
+                              <input
+                                type="text"
+                                value={extractedInvoiceData.vin || ''}
+                                onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, vin: e.target.value }))}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="N/A"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <p className="font-semibold text-gray-700">Customer Name (from Invoice):</p>
+                              <input
+                                type="text"
+                                value={customerName}
+                                onChange={(e) => setCustomerName(e.target.value)}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="Enter name if not extracted"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <p className="font-semibold text-gray-700">Customer Mobile (from Invoice):</p>
+                              <input
+                                type="tel"
+                                value={customerMobile}
+                                onChange={(e) => setCustomerMobile(e.target.value)}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                                placeholder="Enter mobile if not extracted"
+                              />
+                            </div>
+                            {customerDetailsError && (
+                              <p className="text-red-600 text-sm font-medium col-span-2 text-center">{customerDetailsError}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleConfirmDetailsAndProceed}
+                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transform transition-all duration-300 ease-in-out hover:scale-105 mt-6"
+                          >
+                            Confirm Details & Proceed to Review
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={goToDashboard}
+                    className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
+                  >
+                    Back to Dashboard
+                  </button>
+                </div>
+              );
+
+            case 'customerReview':
+              return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-300 to-purple-500 p-4">
+                  <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">How was your service?</h2>
+
+                  {/* Display extracted customer details */}
+                  {customerName && customerMobile && (
+                    <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
+                      <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
+                      <p className="text-2xl font-bold text-blue-700">{customerName}</p>
+                      <p className="text-lg text-gray-600">{customerMobile}</p>
+                      {extractedInvoiceData && (
+                        <div className="mt-4 text-sm text-gray-500">
+                          <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
+                          <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
+                          <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
+                          <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Rating Buttons */}
+                  <div className="flex flex-col items-center w-full max-w-5xl mb-10">
+                    {/* Row 1: 1, 2, 3 */}
+                    <div className="flex justify-center gap-6 mb-6 w-full">
+                      {renderRatingButtons(1, 3)}
+                    </div>
+                    {/* Row 2: 4, 5, 6, 7 */}
+                    <div className="flex justify-center gap-6 mb-6 w-full">
+                      {renderRatingButtons(4, 7)}
+                    </div>
+                    {/* Row 3: 8, 9, 10 */}
+                    <div className="flex justify-center gap-6 w-full">
+                      {renderRatingButtons(8, 10)}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentView('invoiceUpload')} // Go back to invoice upload
+                    className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
+                  >
+                    Back to Invoice Upload
+                  </button>
+                </div>
+              );
+
+            case 'voiceRecording': // NEW: Dedicated voice recording screen
+              return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-400 to-cyan-600 p-4">
+                  <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Record Your Feedback</h2>
+
+                  {customerName && customerMobile && (
+                    <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
+                      <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
+                      <p className="text-2xl font-bold text-blue-700">{customerName}</p>
+                      <p className="text-lg text-gray-600">{customerMobile}</p>
+                      {extractedInvoiceData && (
+                        <div className="mt-4 text-sm text-gray-500">
+                          <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
+                          <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
+                          <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
+                          <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Language Selection Dropdown */}
+                  <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-lg text-center mb-8 border-t-4 border-purple-500">
+                    <label htmlFor="language-select" className="block text-2xl font-semibold text-gray-800 mb-4">
+                      Select Spoken Language:
+                    </label>
+                    <select
+                      id="language-select"
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="block w-full px-4 py-3 text-xl border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition duration-200"
+                    >
+                      <option value="en-US">English (US)</option>
+                      <option value="en-IN">English (India)</option>
+                      <option value="hi-IN">Hindi (India)</option>
+                      <option value="ta-IN">Tamil (India)</option>
+                      <option value="te-IN">Telugu (India)</option>
+                      <option value="kn-IN">Kannada (India)</option>
+                      <option value="ml-IN">Malayalam (India)</option>
+                    </select>
+                  </div>
+
+                  <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-4 border-blue-500">
+                    {isSubmitting ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-blue-600 text-2xl font-medium">
+                        <svg className="animate-spin h-10 w-10 text-blue-500 mb-4" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Processing Invoice...
-                      </>
+                        <span>Submitting your feedback...</span>
+                        <p className="text-lg text-gray-600 mt-2">Please wait, this may take a moment for transcription and translation.</p>
+                      </div>
                     ) : (
-                      'Upload & Extract Details'
+                      <>
+                        <p className="text-2xl font-semibold text-gray-800 mb-6">Click to record your valuable feedback:</p>
+                        {recordingError && (
+                          <p className="text-red-600 text-sm mb-4">{recordingError}</p>
+                        )}
+                        <button
+                          onClick={handleVoiceRecordSubmit}
+                          disabled={isSubmitting}
+                          className={`w-full flex items-center justify-center py-4 px-6 rounded-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-offset-2 transition-all duration-300 ease-in-out text-xl font-bold transform hover:scale-105
+                            ${isRecording ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300' : 'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 focus:ring-green-300'}
+                            text-white`}
+                        >
+                          {isRecording ? (
+                            <>
+                              <span className="relative flex h-3 w-3 mr-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                              </span>
+                              Stop Recording
+                            </>
+                          ) : (
+                            <>
+                              <span className="mr-3 text-3xl">🎤</span> Start Voice Recording
+                            </>
+                          )}
+                        </button>
+                        <p className="text-base text-gray-600 mt-4">
+                          (Click "Start" to begin, "Stop" to finish and submit.)
+                        </p>
+                      </>
                     )}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentView('customerReview')} // Go back to rating selection
+                    disabled={isSubmitting}
+                    className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
+                  >
+                    Go Back to Rating
                   </button>
-                )}
+                </div>
+              );
 
-                {extractedInvoiceData && (
-                  <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">Extracted Invoice Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
-                      <div className="col-span-1">
-                        <p className="font-semibold text-gray-700">Job Card Number:</p>
-                        <input
-                          type="text"
-                          value={extractedInvoiceData.jobCardNumber || ''}
-                          onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, jobCardNumber: e.target.value }))}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="N/A"
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <p className="font-semibold text-gray-700">Invoice Number:</p>
-                        <input
-                          type="text"
-                          value={extractedInvoiceData.invoiceNumber || ''}
-                          onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="N/A"
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <p className="font-semibold text-gray-700">Invoice Date:</p>
-                        <input
-                          type="text"
-                          value={extractedInvoiceData.invoiceDate || ''}
-                          onChange={(e) => {
-  const newDate = e.target.value;
-  const isValid = /^\d{2}\/\d{2}\/\d{4}$/.test(newDate);
-  setExtractedInvoiceData(prev => ({ ...prev, invoiceDate: newDate }));
-  setInvoiceDateError(isValid || newDate === '' ? '' : 'Date must be in DD/MM/YYYY format.');
-}}
-                          pattern="\d{2}/\d{2}/\d{4}" // Client-side validation pattern
-                          title="Please enter date in DD/MM/YYYY format"
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="N/A"
-                        />
-                        {invoiceDateError && (
-  <p className="text-red-600 text-sm font-medium mt-1">{invoiceDateError}</p>
-)}
+            case 'submissionSuccess':
+              const { bgColor, textColor, emoji, messageColor, buttonBg, title } = getSuccessPageStyling();
 
-                      </div>
-                      <div className="col-span-1">
-                        <p className="font-semibold text-gray-700">VIN:</p>
-                        <input
-                          type="text"
-                          value={extractedInvoiceData.vin || ''}
-                          onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, vin: e.target.value }))}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="N/A"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <p className="font-semibold text-gray-700">Customer Name (from Invoice):</p>
-                        <input
-                          type="text"
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="Enter name if not extracted"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <p className="font-semibold text-gray-700">Customer Mobile (from Invoice):</p>
-                        <input
-                          type="tel"
-                          value={customerMobile}
-                          onChange={(e) => setCustomerMobile(e.target.value)}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
-                          placeholder="Enter mobile if not extracted"
-                        />
-                      </div>
-                      {customerDetailsError && (
-                        <p className="text-red-600 text-sm font-medium col-span-2 text-center">{customerDetailsError}</p>
-                      )}
-                    </div>
+              return (
+                <div className={`min-h-screen flex flex-col items-center justify-center bg-gradient-to-br ${bgColor} p-4 text-center`}>
+                  <div className={`bg-white bg-opacity-20 backdrop-filter backdrop-blur-lg p-12 rounded-3xl shadow-3xl transform transition-all duration-700 ease-in-out scale-100 animate-fade-in border-t-8 border-b-8 border-opacity-50 ${feedbackType === 'positive' ? 'border-green-300' : feedbackType === 'neutral' ? 'border-yellow-300' : feedbackType === 'negative' ? 'border-red-300' : 'border-gray-300'}`}>
+                    <span className={`text-9xl mb-6 block ${textColor} animate-bounce-once`}>{emoji}</span>
+                    <h2 className={`text-5xl font-extrabold mb-6 ${textColor} drop-shadow-lg`}>{title}</h2>
+                    <p className={`text-2xl font-medium mb-10 ${messageColor} max-w-2xl mx-auto leading-relaxed`}>
+                      {submissionMessage}
+                    </p>
                     <button
-                      onClick={handleConfirmDetailsAndProceed}
-                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transform transition-all duration-300 ease-in-out hover:scale-105 mt-6"
+                      onClick={goToDashboard}
+                      className={`py-4 px-10 rounded-full text-2xl font-bold text-white shadow-xl transform transition-all duration-300 ease-in-out hover:scale-105 ${buttonBg}`}
                     >
-                      Confirm Details & Proceed to Review
+                      Back to Dashboard
                     </button>
                   </div>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={goToDashboard}
-              className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        );
-
-      case 'customerReview':
-        return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-300 to-purple-500 p-4">
-            <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">How was your service?</h2>
-
-            {/* Display extracted customer details */}
-            {customerName && customerMobile && (
-              <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
-                <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
-                <p className="text-2xl font-bold text-blue-700">{customerName}</p>
-                <p className="text-lg text-gray-600">{customerMobile}</p>
-                {extractedInvoiceData && (
-                  <div className="mt-4 text-sm text-gray-500">
-                    <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
-                    <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
-                    <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
-                    <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Rating Buttons */}
-            <div className="flex flex-col items-center w-full max-w-5xl mb-10">
-              {/* Row 1: 1, 2, 3 */}
-              <div className="flex justify-center gap-6 mb-6 w-full">
-                {renderRatingButtons(1, 3)}
-              </div>
-              {/* Row 2: 4, 5, 6, 7 */}
-              <div className="flex justify-center gap-6 mb-6 w-full">
-                {renderRatingButtons(4, 7)}
-              </div>
-              {/* Row 3: 8, 9, 10 */}
-              <div className="flex justify-center gap-6 w-full">
-                {renderRatingButtons(8, 10)}
-              </div>
-            </div>
-
-            <button
-              onClick={goToInvoiceUpload} // Back to invoice upload
-              className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
-            >
-              Back to Invoice Upload
-            </button>
-          </div>
-        );
-
-      case 'voiceRecording': // NEW: Dedicated voice recording screen
-        return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-teal-400 to-cyan-600 p-4">
-            <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Record Your Feedback</h2>
-
-            {customerName && customerMobile && (
-              <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
-                <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
-                <p className="text-2xl font-bold text-blue-700">{customerName}</p>
-                <p className="text-lg text-gray-600">{customerMobile}</p>
-                {extractedInvoiceData && (
-                  <div className="mt-4 text-sm text-gray-500">
-                    <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
-                    <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
-                    <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
-                    <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Language Selection Dropdown */}
-            <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-lg text-center mb-8 border-t-4 border-purple-500">
-              <label htmlFor="language-select" className="block text-2xl font-semibold text-gray-800 mb-4">
-                Select Spoken Language:
-              </label>
-              <select
-                id="language-select"
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="block w-full px-4 py-3 text-xl border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition duration-200"
-              >
-                <option value="en-US">English (US)</option>
-                <option value="en-IN">English (India)</option>
-                <option value="hi-IN">Hindi (India)</option>
-                <option value="ta-IN">Tamil (India)</option>
-                <option value="te-IN">Telugu (India)</option>
-                <option value="kn-IN">Kannada (India)</option>
-                <option value="ml-IN">Malayalam (India)</option>
-              </select>
-            </div>
-
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-4 border-blue-500">
-              {isSubmitting ? (
-                <div className="flex flex-col items-center justify-center py-8 text-blue-600 text-2xl font-medium">
-                  <svg className="animate-spin h-10 w-10 text-blue-500 mb-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Submitting your feedback...</span>
-                  <p className="text-lg text-gray-600 mt-2">Please wait, this may take a moment for transcription and translation.</p>
                 </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-semibold text-gray-800 mb-6">Click to record your valuable feedback:</p>
-                  {recordingError && (
-                    <p className="text-red-600 text-sm mb-4">{recordingError}</p>
-                  )}
-                  <button
-                    onClick={handleVoiceRecordSubmit}
-                    disabled={isSubmitting}
-                    className={`w-full flex items-center justify-center py-4 px-6 rounded-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-offset-2 transition-all duration-300 ease-in-out text-xl font-bold transform hover:scale-105
-                      ${isRecording ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300' : 'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 focus:ring-green-300'}
-                      text-white`}
-                  >
-                    {isRecording ? (
-                      <>
-                        <span className="relative flex h-3 w-3 mr-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                        </span>
-                        Stop Recording
-                      </>
-                    ) : (
-                      <>
-                        <span className="mr-3 text-3xl">🎤</span> Start Voice Recording
-                      </>
-                    )}
-                  </button>
-                  <p className="text-base text-gray-600 mt-4">
-                    (Click "Start" to begin, "Stop" to finish and submit.)
-                  </p>
-                </>
-              )}
-            </div>
+              );
 
-            <button
-              onClick={() => setCurrentView('customerReview')} // Go back to rating selection
-              disabled={isSubmitting}
-              className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
-            >
-              Go Back to Rating
-            </button>
-          </div>
-        );
+            case 'reviewsDashboard':
+              // Add console logs here to check the props being passed
+              console.log("App.jsx: Rendering ClientReviewsDashboard with clientId:", clientId);
+              console.log("App.jsx: Rendering ClientReviewsDashboard with token:", token);
+              console.log("App.jsx: Rendering ClientReviewsDashboard with companyId:", userData?.companyId);
+              console.log("App.jsx: Rendering ClientReviewsDashboard with branchId:", userData?.branchId);
 
-      case 'submissionSuccess':
-        const { bgColor, textColor, emoji, messageColor, buttonBg, title } = getSuccessPageStyling();
+              return (
+                <ClientReviewsDashboard
+                  clientId={clientId}
+                  token={token}
+                  API_BASE_URL={API_BASE_URL}
+                  handleLogout={handleLogout}
+                  goToDashboard={goToDashboard}
+                  // NEW: Pass companyId and branchId to ClientReviewsDashboard
+                  companyId={userData?.companyId}
+                  branchId={userData?.branchId}
+                />
+              );
 
-        return (
-          <div className={`min-h-screen flex flex-col items-center justify-center bg-gradient-to-br ${bgColor} p-4 text-center`}>
-            <div className={`bg-white bg-opacity-20 backdrop-filter backdrop-blur-lg p-12 rounded-3xl shadow-3xl transform transition-all duration-700 ease-in-out scale-100 animate-fade-in border-t-8 border-b-8 border-opacity-50 ${feedbackType === 'positive' ? 'border-green-300' : feedbackType === 'neutral' ? 'border-yellow-300' : feedbackType === 'negative' ? 'border-red-300' : 'border-gray-300'}`}>
-              <span className={`text-9xl mb-6 block ${textColor} animate-bounce-once`}>{emoji}</span>
-              <h2 className={`text-5xl font-extrabold mb-6 ${textColor} drop-shadow-lg`}>{title}</h2>
-              <p className={`text-2xl font-medium mb-10 ${messageColor} max-w-2xl mx-auto leading-relaxed`}>
-                {submissionMessage}
-              </p>
-              <button
-                onClick={goToDashboard}
-                className={`py-4 px-10 rounded-full text-2xl font-bold text-white shadow-xl transform transition-all duration-300 ease-in-out hover:scale-105 ${buttonBg}`}
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        );
-
-      case 'reviewsDashboard':
-        return (
-          <ClientReviewsDashboard
-            clientId={clientId}
-            token={token}
-            API_BASE_URL={API_BASE_URL}
-            handleLogout={handleLogout}
-            goToDashboard={goToDashboard}
-          />
-        );
-
-      default:
-        return null;
-    }
+            default:
+              return null;
+          }
+        })()}
+      </>
+    );
   };
 
-  return (
-    <div className="font-inter antialiased">
-      {/* Tailwind CSS CDN - Always include this for Tailwind to work */}
-      <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-      {/* Google Fonts - Inter */}
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-
-      {/* Custom CSS for animations (Tailwind doesn't have these by default) */}
-      <style>
-        {`
-        @keyframes bounce-slow {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-15px);
-          }
-        }
-
-        .animate-bounce-slow {
-          animation: bounce-slow 3s infinite ease-in-out;
-        }
-
-        @keyframes pulse-slow {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.05);
-            opacity: 0.8;
-          }
-        }
-
-        .animate-pulse-slow {
-          animation: pulse-slow 3s infinite ease-in-out;
-        }
-
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out forwards;
-        }
-
-        @keyframes bounce-once {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          20% {
-            transform: translateY(-20px);
-          }
-          40% {
-            transform: translateY(0);
-          }
-          60% {
-            transform: translateY(-10px);
-          }
-          80% {
-            transform: translateY(0);
-          }
-        }
-
-        .animate-bounce-once {
-          animation: bounce-once 1.2s ease-out;
-        }
-        `}
-      </style>
-
-      {renderContent()}
-    </div>
-  );
+  return renderContent();
 };
 
 export default App;

@@ -3,8 +3,22 @@
 const mongoose = require('mongoose');
 
 const reviewSchema = new mongoose.Schema({
-  clientId: {
-    type: String,
+  // Changed from clientId (string) to client (ObjectId) referencing the User model
+  client: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', // Reference to the new User model
+    required: true,
+  },
+  // NEW: Reference to the Company this review belongs to
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true,
+  },
+  // NEW: Reference to the Branch this review belongs to
+  branch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Branch',
     required: true,
   },
   customerName: {
@@ -29,11 +43,12 @@ const reviewSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  transcribedText: { // New field for transcribed audio
+  transcribedText: { // Field for transcribed audio (original language or already translated)
     type: String,
     default: null,
   },
-  // New fields for invoice data
+  // REMOVED: translatedText field as per user request.
+  // All relevant text (original or translated) will be stored in transcribedText.
   invoiceFileUrl: { // URL to the uploaded invoice file in GCS
     type: String,
     default: null,
@@ -43,8 +58,8 @@ const reviewSchema = new mongoose.Schema({
     invoiceNumber: { type: String, default: null },
     invoiceDate: { type: String, default: null },
     vin: { type: String, default: null },
-    customerNameFromInvoice: { type: String, default: null }, // Name extracted from delivery address
-    customerMobileFromInvoice: { type: String, default: null }, // Mobile extracted from delivery address
+    customerNameFromInvoice: { type: String, default: null },
+    customerMobileFromInvoice: { type: String, default: null },
   },
   feedbackType: { // 'positive', 'neutral', 'negative'
     type: String,

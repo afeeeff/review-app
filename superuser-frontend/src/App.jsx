@@ -1,0 +1,1567 @@
+import React, { useState, useEffect } from 'react';
+
+// Main App component for the Superuser Interface
+const App = () => {
+  // State for managing the current view: 'login' or 'dashboard'
+  const [currentView, setCurrentView] = useState('login');
+  // State for login form inputs
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  // State for login error messages
+  const [loginError, setLoginError] = useState('');
+  // State to store the authenticated user's data (including token, role, etc.)
+  const [userData, setUserData] = useState(null);
+  // State for managing active tab in the dashboard: 'manage' or 'reviews'
+  const [activeTab, setActiveTab] = useState('manage');
+
+  // States for managing entities data
+  const [companies, setCompanies] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [allClients, setAllClients] = useState([]); // All clients for general purposes (e.g., client management)
+  const [filteredClients, setFilteredClients] = useState([]); // Clients for the review filter dropdown
+
+  // States for forms (Add/Edit)
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
+  const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
+  const [editingCompany, setEditingCompany] = useState(null); // null or company object
+  // NEW: State to control visibility of Add Company form
+  const [showAddCompanyForm, setShowAddCompanyForm] = useState(false);
+
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchAdminEmail, setNewBranchAdminEmail] = useState('');
+  const [newBranchAdminPassword, setNewBranchAdminPassword] = useState('');
+  const [selectedCompanyForBranch, setSelectedCompanyForBranch] = useState(''); // For creating new branch
+  const [editingBranch, setEditingBranch] = useState(null); // null or branch object
+  // NEW: State to control visibility of Add Branch form
+  const [showAddBranchForm, setShowAddBranchForm] = useState(false);
+
+
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPassword, setNewClientPassword] = useState('');
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerMobile, setNewCustomerMobile] = useState('');
+  const [selectedCompanyForClient, setSelectedCompanyForClient] = useState(''); // For creating new client
+  const [selectedBranchForClient, setSelectedBranchForClient] = useState(''); // For creating new client
+  const [editingClient, setEditingClient] = useState(null); // null or client object
+  // NEW: State to control visibility of Add Client form
+  const [showAddClientForm, setShowAddClientForm] = useState(false);
+
+
+  // States for reviews viewing
+  const [reviews, setReviews] = useState([]);
+  const [filterCompanyId, setFilterCompanyId] = useState('');
+  const [filterBranchId, setFilterBranchId] = useState('');
+  const [filterClientId, setFilterClientId] = useState(''); // New state for client filter
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+
+  // Loading and error states
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Base URL for your backend API
+  const API_BASE_URL = 'http://localhost:5000/api'; // IMPORTANT: Change this to your backend URL in production
+
+  // Helper to get auth headers
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${userData?.token}`,
+  });
+
+  // Effect to check for stored token on component mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem('superuserToken');
+    const storedUserData = localStorage.getItem('superuserUserData');
+
+    if (storedToken && storedUserData) {
+      try {
+        const parsedUserData = JSON.parse(storedUserData);
+        // Basic validation: ensure it's a superuser token
+        if (parsedUserData.role === 'superuser') {
+          setUserData(parsedUserData);
+          setCurrentView('dashboard');
+        } else {
+          // If a non-superuser token is found, clear it
+          localStorage.removeItem('superuserToken');
+          localStorage.removeItem('superuserUserData');
+        }
+      } catch (error) {
+        console.error('Failed to parse stored user data:', error);
+        localStorage.removeItem('superuserToken');
+        localStorage.removeItem('superuserUserData');
+      }
+    }
+  }, []);
+
+  // Effect to fetch initial data when dashboard is loaded and user is authenticated
+  useEffect(() => {
+    if (currentView === 'dashboard' && userData?.token) {
+      if (activeTab === 'manage') {
+        fetchAllCompanies();
+        fetchAllClientsForManagement(); // Fetch all clients for client management tab
+      } else if (activeTab === 'reviews') {
+        fetchAllCompanies(); // Always fetch companies for review filters
+        // Fetch clients and branches based on current filter selections
+        fetchClientsAndBranchesForReviewFilters(filterCompanyId, filterBranchId);
+        fetchAllReviews(); // Fetch reviews when reviews tab is active
+      }
+    }
+  }, [currentView, userData, activeTab, filterCompanyId, filterBranchId, filterClientId, filterStartDate, filterEndDate]); // Re-fetch if view, user, active tab, or filters change
+
+  // Handle login form submission
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError(''); // Clear previous errors
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.role === 'superuser') {
+          // Store token and user data in local storage
+          localStorage.setItem('superuserToken', data.token);
+          localStorage.setItem('superuserUserData', JSON.stringify(data));
+          setUserData(data);
+          setCurrentView('dashboard');
+        } else {
+          setLoginError('Access Denied: Not a Superuser account.');
+        }
+      } else {
+        setLoginError(data.message || 'Login failed. Please check your credentials.');
+      }
+    } catch (error) {
+      console.error('Login API error:', error);
+      setLoginError('Network error or server unavailable. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem('superuserToken');
+    localStorage.removeItem('superuserUserData');
+    setUserData(null);
+    setCurrentView('login');
+    setEmail('');
+    setPassword('');
+    // Clear all entity data as well
+    setCompanies([]);
+    setBranches([]);
+    setAllClients([]); // Clear all clients
+    setFilteredClients([]); // Clear filtered clients
+    setReviews([]); // Clear reviews on logout
+  };
+
+  // --- API Calls for Companies, Branches, Clients ---
+
+  const fetchAllCompanies = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies`, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setCompanies(data);
+      } else {
+        setError(data.message || 'Failed to fetch companies.');
+      }
+    } catch (err) {
+      console.error('Error fetching companies:', err);
+      setError('Network error fetching companies.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchBranchesByCompany = async (companyId) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies/${companyId}/branches`, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setBranches(data);
+      } else {
+        setError(data.message || 'Failed to fetch branches.');
+        setBranches([]); // Clear branches on error
+      }
+    } catch (err) {
+      console.error('Error fetching branches:', err);
+      setError('Network error fetching branches.');
+      setBranches([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetches clients for management tab (can be all, or by company/branch)
+  const fetchClientsByBranchOrCompany = async (parentId, type) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      let url = '';
+      if (type === 'branch') {
+        url = `${API_BASE_URL}/superuser/branches/${parentId}/clients`;
+      } else if (type === 'company') {
+        url = `${API_BASE_URL}/superuser/companies/${parentId}/clients`;
+      } else {
+        url = `${API_BASE_URL}/superuser/clients`; // Fetch all clients for superuser
+      }
+
+      const response = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAllClients(data); // Update the 'allClients' state
+      } else {
+        setError(data.message || 'Failed to fetch clients.');
+        setAllClients([]); // Clear clients on error
+      }
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+      setError('Network error fetching clients.');
+      setAllClients([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetches all clients for the client management tab initially
+  const fetchAllClientsForManagement = async () => {
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/clients`, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAllClients(data);
+      } else {
+        setError(data.message || 'Failed to fetch all clients for management.');
+        setAllClients([]);
+      }
+    } catch (err) {
+      console.error('Error fetching all clients for management:', err);
+      setError('Network error fetching all clients for management.');
+      setAllClients([]);
+    }
+  };
+
+  // NEW: Function to fetch clients and branches specifically for the review filters
+  const fetchClientsAndBranchesForReviewFilters = async (companyId, branchId) => {
+    setError('');
+    setIsLoading(true); // Indicate loading for filters
+
+    try {
+      // Fetch branches based on selected company
+      if (companyId) {
+        const branchResponse = await fetch(`${API_BASE_URL}/superuser/companies/${companyId}/branches`, {
+          headers: getAuthHeaders(),
+        });
+        const branchData = await branchResponse.json();
+        if (branchResponse.ok) {
+          setBranches(branchData);
+        } else {
+          setError(branchData.message || 'Failed to fetch branches for filter.');
+          setBranches([]);
+        }
+      } else {
+        setBranches([]); // Clear branches if no company selected
+      }
+
+      // Determine client fetch URL based on company and branch selection
+      let clientUrl = `${API_BASE_URL}/superuser/clients`; // Default to all clients
+      if (branchId) {
+        clientUrl = `${API_BASE_URL}/superuser/branches/${branchId}/clients`;
+      } else if (companyId) {
+        clientUrl = `${API_BASE_URL}/superuser/companies/${companyId}/clients`;
+      }
+
+      const clientResponse = await fetch(clientUrl, {
+        headers: getAuthHeaders(),
+      });
+      const clientData = await clientResponse.json();
+      if (clientResponse.ok) {
+        setFilteredClients(clientData); // Update the 'filteredClients' state for the dropdown
+      } else {
+        setError(clientData.message || 'Failed to fetch clients for filter.');
+        setFilteredClients([]);
+      }
+    } catch (err) {
+      console.error('Error fetching clients/branches for review filters:', err);
+      setError('Network error fetching filter data.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+  // --- Company CRUD Operations ---
+  const handleCreateCompany = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!newCompanyName || !newCompanyAdminEmail || !newCompanyAdminPassword) {
+      setError('All company creation fields are required.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          companyName: newCompanyName,
+          adminEmail: newCompanyAdminEmail,
+          adminPassword: newCompanyAdminPassword,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Company created successfully!');
+        setNewCompanyName('');
+        setNewCompanyAdminEmail('');
+        setNewCompanyAdminPassword('');
+        setShowAddCompanyForm(false); // Hide form after creation
+        fetchAllCompanies(); // Refresh list
+      } else {
+        setError(data.message || 'Failed to create company.');
+      }
+    } catch (err) {
+      console.error('Error creating company:', err);
+      setError('Network error creating company.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditCompany = (company) => {
+    setEditingCompany(company);
+    setNewCompanyName(company.name);
+    setNewCompanyAdminEmail(company.companyAdmin?.email || ''); // Pre-fill admin email
+    setNewCompanyAdminPassword(''); // Password should not be pre-filled for security
+    setShowAddCompanyForm(true); // Show form for editing
+  };
+
+  const handleUpdateCompany = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!editingCompany || !newCompanyName || !newCompanyAdminEmail) {
+      setError('All fields are required for update.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies/${editingCompany._id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          companyName: newCompanyName,
+          adminEmail: newCompanyAdminEmail,
+          // Only send password if it's explicitly changed
+          ...(newCompanyAdminPassword && { adminPassword: newCompanyAdminPassword }),
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Company updated successfully!');
+        setEditingCompany(null);
+        setNewCompanyName('');
+        setNewCompanyAdminEmail('');
+        setNewCompanyAdminPassword('');
+        setShowAddCompanyForm(false); // Hide form after update
+        fetchAllCompanies(); // Refresh list
+      } else {
+        setError(data.message || 'Failed to update company.');
+      }
+    } catch (err) {
+      console.error('Error updating company:', err);
+      setError('Network error updating company.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCompany = async (companyId) => {
+    if (!window.confirm('Are you sure you want to delete this company and ALL its associated branches, clients, and reviews? This action cannot be undone.')) {
+      return;
+    }
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies/${companyId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Company deleted successfully!');
+        fetchAllCompanies(); // Refresh list
+        setBranches([]); // Clear branches and allClients as they might be deleted
+        setAllClients([]);
+      } else {
+        setError(data.message || 'Failed to delete company.');
+      }
+    } catch (err) {
+      console.error('Error deleting company:', err);
+      setError('Network error deleting company.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Branch CRUD Operations ---
+  const handleCreateBranch = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!selectedCompanyForBranch || !newBranchName || !newBranchAdminEmail || !newBranchAdminPassword) {
+      setError('All branch creation fields are required.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies/${selectedCompanyForBranch}/branches`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          branchName: newBranchName,
+          adminEmail: newBranchAdminEmail,
+          adminPassword: newBranchAdminPassword,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Branch created successfully!');
+        setNewBranchName('');
+        setNewBranchAdminEmail('');
+        setNewBranchAdminPassword('');
+        setShowAddBranchForm(false); // Hide form after creation
+        // Refresh branches for the selected company
+        fetchBranchesByCompany(selectedCompanyForBranch);
+      } else {
+        setError(data.message || 'Failed to create branch.');
+      }
+    } catch (err) {
+      console.error('Error creating branch:', err);
+      setError('Network error creating branch.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditBranch = (branch) => {
+    setEditingBranch(branch);
+    setNewBranchName(branch.name);
+    setNewBranchAdminEmail(branch.branchAdmin?.email || '');
+    setNewBranchAdminPassword('');
+    setSelectedCompanyForBranch(branch.company._id || branch.company); // Pre-fill company ID
+    setShowAddBranchForm(true); // Show form for editing
+  };
+
+  const handleUpdateBranch = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!editingBranch || !newBranchName || !newBranchAdminEmail) {
+      setError('All fields are required for update.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/branches/${editingBranch._id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          branchName: newBranchName,
+          adminEmail: newBranchAdminEmail,
+          ...(newBranchAdminPassword && { adminPassword: newBranchAdminPassword }),
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Branch updated successfully!');
+        setEditingBranch(null);
+        setNewBranchName('');
+        setNewBranchAdminEmail('');
+        setNewBranchAdminPassword('');
+        setShowAddBranchForm(false); // Hide form after update
+        // Refresh branches for the selected company
+        fetchBranchesByCompany(selectedCompanyForBranch);
+      } else {
+        setError(data.message || 'Failed to update branch.');
+      }
+    } catch (err) {
+      console.error('Error updating branch:', err);
+      setError('Network error updating branch.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteBranch = async (branchId, companyId) => {
+    if (!window.confirm('Are you sure you want to delete this branch and ALL its associated clients and reviews? This action cannot be undone.')) {
+      return;
+    }
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/branches/${branchId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Branch deleted successfully!');
+        fetchBranchesByCompany(companyId); // Refresh branches for the current company
+        setAllClients([]); // Clear allClients as they might be deleted
+      } else {
+        setError(data.message || 'Failed to delete branch.');
+      }
+    } catch (err) {
+      console.error('Error deleting branch:', err);
+      setError('Network error deleting branch.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Client CRUD Operations ---
+  const handleCreateClient = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!newClientEmail || !newClientPassword || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClient && !selectedBranchForClient)) {
+      setError('All client creation fields and a parent company/branch are required.');
+      setIsLoading(false);
+      return;
+    }
+
+    let url = '';
+    let payload = {
+      clientEmail: newClientEmail,
+      clientPassword: newClientPassword,
+      customerName: newCustomerName,
+      customerMobile: newCustomerMobile,
+    };
+
+    if (selectedBranchForClient) {
+      url = `${API_BASE_URL}/superuser/branches/${selectedBranchForClient}/clients`;
+    } else if (selectedCompanyForClient) {
+      url = `${API_BASE_URL}/superuser/companies/${selectedCompanyForClient}/clients`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Client created successfully!');
+        setNewClientEmail('');
+        setNewClientPassword('');
+        setNewCustomerName('');
+        setNewCustomerMobile('');
+        setShowAddClientForm(false); // Hide form after creation
+        // Refresh clients based on current selection
+        if (selectedBranchForClient) {
+          fetchClientsByBranchOrCompany(selectedBranchForClient, 'branch');
+        } else if (selectedCompanyForClient) {
+          fetchClientsByBranchOrCompany(selectedCompanyForClient, 'company');
+        } else {
+          fetchAllClientsForManagement(); // Fetch all clients
+        }
+      } else {
+        setError(data.message || 'Failed to create client.');
+      }
+    } catch (err) {
+      console.error('Error creating client:', err);
+      setError('Network error creating client.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditClient = (client) => {
+    setEditingClient(client);
+    setNewClientEmail(client.email);
+    setNewClientPassword(''); // Password not pre-filled
+    // Assuming customerName and customerMobile are on the User model for clients
+    // If not, you'll need to adjust where this data comes from (e.g., from Review model)
+    // For now, these fields are commented out in the backend controller. If you add them to User model, uncomment here.
+    setNewCustomerName(client.customerName || ''); // Assuming these fields are now on the User model
+    setNewCustomerMobile(client.customerMobile || ''); // Assuming these fields are now on the User model
+    setSelectedCompanyForClient(client.company?._id || client.company || '');
+    setSelectedBranchForClient(client.branch?._id || client.branch || '');
+    setShowAddClientForm(true); // Show form for editing
+  };
+
+  const handleUpdateClient = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    if (!editingClient || !newClientEmail || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClient && !selectedBranchForClient)) {
+      setError('All fields are required for update and a parent company/branch must be selected.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/clients/${editingClient._id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          clientEmail: newClientEmail,
+          ...(newClientPassword && { clientPassword: newClientPassword }),
+          customerName: newCustomerName, // Send updated customerName
+          customerMobile: newCustomerMobile, // Send updated customerMobile
+          branchId: selectedBranchForClient || null, // Pass null if no branch selected
+          companyId: selectedCompanyForClient || null,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Client updated successfully!');
+        setEditingClient(null);
+        setNewClientEmail('');
+        setNewClientPassword('');
+        setNewCustomerName('');
+        setNewCustomerMobile('');
+        setShowAddClientForm(false); // Hide form after update
+        // Refresh clients based on current selection
+        if (selectedBranchForClient) {
+          fetchClientsByBranchOrCompany(selectedBranchForClient, 'branch');
+        } else if (selectedCompanyForClient) {
+          fetchClientsByBranchOrCompany(selectedCompanyForClient, 'company');
+        } else {
+          fetchAllClientsForManagement(); // Fetch all clients
+        }
+      } else {
+        setError(data.message || 'Failed to update client.');
+      }
+    } catch (err) {
+      console.error('Error updating client:', err);
+      setError('Network error updating client.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async (clientId, parentType, parentId) => {
+    if (!window.confirm('Are you sure you want to delete this client and ALL their associated reviews? This action cannot be undone.')) {
+      return;
+    }
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/superuser/clients/${clientId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMessage('Client deleted successfully!');
+        // Refresh clients based on current selection
+        if (parentType === 'branch') {
+          fetchClientsByBranchOrCompany(parentId, 'branch');
+        } else if (parentType === 'company') {
+          fetchClientsByBranchOrCompany(parentId, 'company');
+        } else {
+          fetchAllClientsForManagement(); // Fetch all clients
+        }
+      } else {
+        setError(data.message || 'Failed to delete client.');
+      }
+    } catch (err) {
+      console.error('Error deleting client:', err);
+      setError('Network error deleting client.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Reviews API Calls ---
+  const fetchAllReviews = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      let url = `${API_BASE_URL}/superuser/reviews?`;
+      if (filterCompanyId) {
+        url += `companyId=${filterCompanyId}&`;
+      }
+      if (filterBranchId) {
+        url += `branchId=${filterBranchId}&`;
+      }
+      if (filterClientId) { // New filter parameter
+        url += `clientId=${filterClientId}&`;
+      }
+      if (filterStartDate) {
+        url += `startDate=${filterStartDate}&`;
+      }
+      if (filterEndDate) {
+        url += `endDate=${filterEndDate}&`;
+      }
+
+      const response = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setReviews(data);
+      } else {
+        setError(data.message || 'Failed to fetch reviews.');
+        setReviews([]);
+      }
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+      setError('Network error fetching reviews.');
+      setReviews([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Render Functions for Manage Entities Tab ---
+
+  const renderCompanyManagement = () => (
+    <div className="mb-8 p-6 bg-blue-50 rounded-lg shadow-inner">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-xl font-semibold text-blue-800">Companies</h4>
+        <button
+          onClick={() => {
+            setShowAddCompanyForm(!showAddCompanyForm);
+            // Clear form fields when toggling to add mode
+            if (!showAddCompanyForm) {
+              setEditingCompany(null);
+              setNewCompanyName('');
+              setNewCompanyAdminEmail('');
+              setNewCompanyAdminPassword('');
+            }
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+        >
+          {showAddCompanyForm ? 'Hide Add Company Form' : 'Add New Company'}
+        </button>
+      </div>
+
+      {showAddCompanyForm && (
+        <form onSubmit={editingCompany ? handleUpdateCompany : handleCreateCompany} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
+          <h5 className="text-lg font-semibold text-gray-800">{editingCompany ? 'Edit Company Details' : 'Create New Company'}</h5>
+          <div>
+            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name:</label>
+            <input
+              type="text"
+              id="companyName"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCompanyName}
+              onChange={(e) => setNewCompanyName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="companyAdminEmail" className="block text-sm font-medium text-gray-700">Admin Email:</label>
+            <input
+              type="email"
+              id="companyAdminEmail"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCompanyAdminEmail}
+              onChange={(e) => setNewCompanyAdminEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="companyAdminPassword" className="block text-sm font-medium text-gray-700">Admin Password: {editingCompany ? '(Leave blank to keep current)' : ''}</label>
+            <input
+              type="password"
+              id="companyAdminPassword"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCompanyAdminPassword}
+              onChange={(e) => setNewCompanyAdminPassword(e.target.value)}
+              required={!editingCompany} // Required only for new creation
+            />
+          </div>
+          <div className="flex space-x-2">
+            <button
+              type="submit"
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Processing...' : (editingCompany ? 'Update Company' : 'Create Company')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingCompany(null);
+                setNewCompanyName('');
+                setNewCompanyAdminEmail('');
+                setNewCompanyAdminPassword('');
+                setShowAddCompanyForm(false); // Hide form on cancel
+              }}
+              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      <h4 className="text-xl font-semibold text-blue-800 mt-8 mb-4">Existing Companies</h4>
+      {companies.length === 0 && !isLoading && <p className="text-gray-600">No companies found.</p>}
+      {companies.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {companies.map((company) => (
+                <tr key={company._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{company.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.companyAdmin?.email || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEditCompany(company)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCompany(company._id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button
+                      onClick={() => {
+                        setSelectedCompanyForBranch(company._id);
+                        fetchBranchesByCompany(company._id);
+                        setBranches([]); // Clear previous branches when selecting new company
+                        setAllClients([]); // Clear allClients too
+                        setSelectedBranchForClient(''); // Clear selected branch for client
+                        setShowAddBranchForm(false); // Hide add branch form
+                        setShowAddClientForm(false); // Hide add client form
+                      }}
+                      className="text-green-600 hover:text-green-900"
+                    >
+                      View Branches ({company.name})
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderBranchManagement = () => (
+    <div className="mb-8 p-6 bg-green-50 rounded-lg shadow-inner">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-xl font-semibold text-green-800">Branches</h4>
+        <button
+          onClick={() => {
+            setShowAddBranchForm(!showAddBranchForm);
+            // Clear form fields when toggling to add mode
+            if (!showAddBranchForm) {
+              setEditingBranch(null);
+              setNewBranchName('');
+              setNewBranchAdminEmail('');
+              setNewBranchAdminPassword('');
+              setSelectedCompanyForBranch(''); // Clear selected company for branch
+            }
+          }}
+          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
+        >
+          {showAddBranchForm ? 'Hide Add Branch Form' : 'Add New Branch'}
+        </button>
+      </div>
+
+      {showAddBranchForm && (
+        <form onSubmit={editingBranch ? handleUpdateBranch : handleCreateBranch} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
+          <h5 className="text-lg font-semibold text-gray-800">{editingBranch ? 'Edit Branch Details' : 'Create New Branch'}</h5>
+          <div>
+            <label htmlFor="selectCompanyForBranch" className="block text-sm font-medium text-gray-700">Select Company:</label>
+            <select
+              id="selectCompanyForBranch"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={selectedCompanyForBranch}
+              onChange={(e) => {
+                setSelectedCompanyForBranch(e.target.value);
+                // Clear branches and allClients when company selection changes
+                setBranches([]);
+                setAllClients([]);
+                setSelectedBranchForClient(''); // Clear selected branch for client
+                if (e.target.value) {
+                  fetchBranchesByCompany(e.target.value);
+                }
+              }}
+              required
+              disabled={!!editingBranch} // Disable if editing a branch
+            >
+              <option value="">-- Select a Company --</option>
+              {companies.map(company => (
+                <option key={company._id} value={company._id}>{company.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedCompanyForBranch && (
+            <>
+              <div>
+                <label htmlFor="branchName" className="block text-sm font-medium text-gray-700">Branch Name:</label>
+                <input
+                  type="text"
+                  id="branchName"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="branchAdminEmail" className="block text-sm font-medium text-gray-700">Admin Email:</label>
+                <input
+                  type="email"
+                  id="branchAdminEmail"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newBranchAdminEmail}
+                  onChange={(e) => setNewBranchAdminEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="branchAdminPassword" className="block text-sm font-medium text-gray-700">Admin Password: {editingBranch ? '(Leave blank to keep current)' : ''}</label>
+                <input
+                  type="password"
+                  id="branchAdminPassword"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newBranchAdminPassword}
+                  onChange={(e) => setNewBranchAdminPassword(e.target.value)}
+                  required={!editingBranch}
+                />
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Processing...' : (editingBranch ? 'Update Branch' : 'Create Branch')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingBranch(null);
+                    setNewBranchName('');
+                    setNewBranchAdminEmail('');
+                    setNewBranchAdminPassword('');
+                    setShowAddBranchForm(false); // Hide form on cancel
+                  }}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+        </form>
+      )}
+
+      <h4 className="text-xl font-semibold text-green-800 mt-8 mb-4">Branches for Selected Company</h4>
+      {!selectedCompanyForBranch && <p className="text-gray-600">Please select a company to view its branches.</p>}
+      {selectedCompanyForBranch && branches.length === 0 && !isLoading && <p className="text-gray-600">No branches found for this company.</p>}
+      {selectedCompanyForBranch && branches.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clients</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {branches.map((branch) => (
+                <tr key={branch._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{branch.branchAdmin?.email || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEditBranch(branch)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteBranch(branch._id, branch.company._id || branch.company)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button
+                      onClick={() => {
+                        setSelectedBranchForClient(branch._id);
+                        setSelectedCompanyForClient(branch.company._id || branch.company);
+                        fetchClientsByBranchOrCompany(branch._id, 'branch');
+                        setShowAddClientForm(false); // Hide add client form
+                      }}
+                      className="text-purple-600 hover:text-purple-900"
+                    >
+                      View Clients ({branch.name})
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderClientManagement = () => (
+    <div className="mb-8 p-6 bg-purple-50 rounded-lg shadow-inner">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-xl font-semibold text-purple-800">Clients</h4>
+        <button
+          onClick={() => {
+            setShowAddClientForm(!showAddClientForm);
+            // Clear form fields when toggling to add mode
+            if (!showAddClientForm) {
+              setEditingClient(null);
+              setNewClientEmail('');
+              setNewClientPassword('');
+              setNewCustomerName('');
+              setNewCustomerMobile('');
+              setSelectedCompanyForClient('');
+              setSelectedBranchForClient('');
+            }
+          }}
+          className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
+        >
+          {showAddClientForm ? 'Hide Add Client Form' : 'Add New Client'}
+        </button>
+      </div>
+
+      {showAddClientForm && (
+        <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
+          <h5 className="text-lg font-semibold text-gray-800">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
+          <div>
+            <label htmlFor="selectCompanyForClient" className="block text-sm font-medium text-gray-700">Select Company:</label>
+            <select
+              id="selectCompanyForClient"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={selectedCompanyForClient}
+              onChange={(e) => {
+                setSelectedCompanyForClient(e.target.value);
+                setSelectedBranchForClient(''); // Clear branch selection when company changes
+                setAllClients([]); // Clear clients
+                if (e.target.value) {
+                  fetchBranchesByCompany(e.target.value); // Fetch branches for new company
+                } else {
+                  setBranches([]); // Clear branches if no company selected
+                }
+              }}
+              required
+              disabled={!!editingClient} // Disable if editing a client
+            >
+              <option value="">-- Select a Company --</option>
+              {companies.map(company => (
+                <option key={company._id} value={company._id}>{company.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedCompanyForClient && (
+            <div>
+              <label htmlFor="selectBranchForClient" className="block text-sm font-medium text-gray-700">Select Branch (Optional):</label>
+              <select
+                id="selectBranchForClient"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                value={selectedBranchForClient}
+                onChange={(e) => setSelectedBranchForClient(e.target.value)}
+                disabled={!!editingClient || branches.length === 0} // Disable if editing or no branches
+              >
+                <option value="">-- Select a Branch --</option>
+                {branches.map(branch => (
+                  <option key={branch._id} value={branch._id}>{branch.name}</option>
+                ))}
+              </select>
+              {branches.length === 0 && selectedCompanyForClient && (
+                <p className="text-sm text-gray-500 mt-1">No branches available for this company. Client will be assigned directly to the company.</p>
+              )}
+            </div>
+          )}
+
+          {(selectedCompanyForClient || selectedBranchForClient) && (
+            <>
+              <div>
+                <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">Client Email:</label>
+                <input
+                  type="email"
+                  id="clientEmail"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newClientEmail}
+                  onChange={(e) => setNewClientEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="clientPassword" className="block text-sm font-medium text-gray-700">Client Password: {editingClient ? '(Leave blank to keep current)' : ''}</label>
+                <input
+                  type="password"
+                  id="clientPassword"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newClientPassword}
+                  onChange={(e) => setNewClientPassword(e.target.value)}
+                  required={!editingClient}
+                />
+              </div>
+              <div>
+                <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">Customer Name (for Client):</label>
+                <input
+                  type="text"
+                  id="customerName"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="customerMobile" className="block text-sm font-medium text-gray-700">Customer Mobile (for Client):</label>
+                <input
+                  type="text"
+                  id="customerMobile"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newCustomerMobile}
+                  onChange={(e) => setNewCustomerMobile(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Create Client')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingClient(null);
+                    setNewClientEmail('');
+                    setNewClientPassword('');
+                    setNewCustomerName('');
+                    setNewCustomerMobile('');
+                    setSelectedCompanyForClient('');
+                    setSelectedBranchForClient('');
+                    setShowAddClientForm(false); // Hide form on cancel
+                  }}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+        </form>
+      )}
+
+      <h4 className="text-xl font-semibold text-purple-800 mt-8 mb-4">Clients for Selected {selectedBranchForClient ? 'Branch' : (selectedCompanyForClient ? 'Company' : '')}</h4>
+      {!selectedCompanyForClient && !selectedBranchForClient && <p className="text-gray-600">Please select a company or branch to view its clients.</p>}
+      {(selectedCompanyForClient || selectedBranchForClient) && allClients.length === 0 && !isLoading && <p className="text-gray-600">No clients found for this {selectedBranchForClient ? 'branch' : 'company'}.</p>}
+      {(selectedCompanyForClient || selectedBranchForClient) && allClients.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {allClients.map((client) => (
+                <tr key={client._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerName || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.company?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.branch?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEditClient(client)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClient(client._id, selectedBranchForClient ? 'branch' : 'company', selectedBranchForClient || selectedCompanyForClient)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+
+  const renderManageEntities = () => (
+    <div className="p-6 bg-white rounded-lg shadow-md">
+      <h3 className="text-2xl font-semibold text-gray-800 mb-4">Manage Companies, Branches & Clients</h3>
+
+      {isLoading && (
+        <div className="text-center text-indigo-600 font-semibold mb-4">Loading...</div>
+      )}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <strong className="font-bold">Error!</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      )}
+      {successMessage && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <strong className="font-bold">Success!</strong>
+          <span className="block sm:inline"> {successMessage}</span>
+        </div>
+      )}
+
+      {renderCompanyManagement()}
+      {renderBranchManagement()}
+      {renderClientManagement()}
+    </div>
+  );
+
+  // Render the Reviews Viewing content
+  const renderViewReviews = () => (
+    <div className="p-6 bg-white rounded-lg shadow-md">
+      <h3 className="text-2xl font-semibold text-gray-800 mb-4">View All Reviews</h3>
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div>
+          <label htmlFor="filterCompany" className="block text-sm font-medium text-gray-700">Filter by Company:</label>
+          <select
+            id="filterCompany"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={filterCompanyId}
+            onChange={(e) => {
+              setFilterCompanyId(e.target.value);
+              setFilterBranchId(''); // Reset branch filter when company changes
+              setFilterClientId(''); // Reset client filter when company changes
+              fetchClientsAndBranchesForReviewFilters(e.target.value, ''); // Fetch branches and clients for new company
+            }}
+          >
+            <option value="">All Companies</option>
+            {companies.map(company => (
+              <option key={company._id} value={company._id}>{company.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="filterBranch" className="block text-sm font-medium text-gray-700">Filter by Branch:</label>
+          <select
+            id="filterBranch"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={filterBranchId}
+            onChange={(e) => {
+              setFilterBranchId(e.target.value);
+              setFilterClientId(''); // Reset client filter when branch changes
+              fetchClientsAndBranchesForReviewFilters(filterCompanyId, e.target.value); // Fetch clients for new branch
+            }}
+            disabled={!filterCompanyId || branches.length === 0} // Disable if no company selected or no branches
+          >
+            <option value="">All Branches</option>
+            {branches.map(branch => (
+              <option key={branch._id} value={branch._id}>{branch.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Filter by Client - Now uses filteredClients */}
+        <div>
+          <label htmlFor="filterClient" className="block text-sm font-medium text-gray-700">Filter by Client:</label>
+          <select
+            id="filterClient"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={filterClientId}
+            onChange={(e) => setFilterClientId(e.target.value)}
+            disabled={filteredClients.length === 0 && (filterCompanyId || filterBranchId)} // Disable if no clients for selected company/branch
+          >
+            <option value="">All Clients</option>
+            {filteredClients.map(client => (
+              <option key={client._id} value={client._id}>{client.email}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="filterStartDate" className="block text-sm font-medium text-gray-700">Start Date:</label>
+          <input
+            type="date"
+            id="filterStartDate"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={filterStartDate}
+            onChange={(e) => setFilterStartDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="filterEndDate" className="block text-sm font-medium text-gray-700">End Date:</label>
+          <input
+            type="date"
+            id="filterEndDate"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={filterEndDate}
+            onChange={(e) => setFilterEndDate(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={fetchAllReviews}
+        className="mb-6 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        disabled={isLoading}
+      >
+        {isLoading ? 'Loading Reviews...' : 'Apply Filters'}
+      </button>
+
+      {isLoading && (
+        <div className="text-center text-indigo-600 font-semibold mb-4">Loading Reviews...</div>
+      )}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <strong className="font-bold">Error!</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      )}
+
+      <h4 className="text-xl font-semibold text-gray-800 mb-4">All Reviews ({reviews.length})</h4>
+      {reviews.length === 0 && !isLoading && !error && <p className="text-gray-600">No reviews found matching your criteria.</p>}
+      {reviews.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transcribed Text</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voice Audio</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Data</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reviews.map((review) => (
+                <tr key={review._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{review.rating}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {review.customerName} ({review.customerMobile})<br/>
+                    <span className="text-xs text-gray-400">Client: {review.client?.email || 'N/A'}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.company?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.branch?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">{review.transcribedText || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {review.voiceData ? (
+                      <a href={review.voiceData} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-900">Listen</a>
+                    ) : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">
+                    {review.invoiceData ? (
+                      <div className="text-xs">
+                        {review.invoiceData.jobCardNumber && `Job Card: ${review.invoiceData.jobCardNumber}`}<br/>
+                        {review.invoiceData.invoiceNumber && `Invoice No: ${review.invoiceData.invoiceNumber}`}<br/>
+                        {review.invoiceData.invoiceDate && `Date: ${review.invoiceData.invoiceDate}`}
+                      </div>
+                    ) : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render the login view
+  const renderLogin = () => (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-700 p-4"> {/* Enhanced background */}
+      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+        <h2 className="text-3xl font-bold text-center text-indigo-800 mb-6">Superuser Login</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email:</label>
+            <input
+              type="email"
+              id="email"
+              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password:</label>
+            <input
+              type="password"
+              id="password"
+              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          {loginError && (
+            <p className="text-red-600 text-sm text-center">{loginError}</p>
+          )}
+          <button
+            type="submit"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Logging In...' : 'Login'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  // Render the dashboard view
+  const renderDashboard = () => (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-indigo-700 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Superuser Dashboard</h1>
+        <div className="flex items-center space-x-4">
+          <span className="text-lg">Welcome, {userData?.email} (Superuser)</span>
+          <button
+            onClick={handleLogout}
+            className="bg-indigo-800 hover:bg-indigo-900 text-white px-4 py-2 rounded-md transition duration-300 ease-in-out"
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Navigation Tabs */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-start h-16">
+            <button
+              onClick={() => setActiveTab('manage')}
+              className={`px-6 py-3 text-lg font-medium ${
+                activeTab === 'manage'
+                  ? 'border-b-4 border-indigo-600 text-indigo-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              } focus:outline-none transition-colors duration-200`}
+            >
+              Manage Entities
+            </button>
+            <button
+              onClick={() => setActiveTab('reviews')}
+              className={`px-6 py-3 text-lg font-medium ${
+                activeTab === 'reviews'
+                  ? 'border-b-4 border-indigo-600 text-indigo-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              } focus:outline-none transition-colors duration-200`}
+            >
+              View Reviews
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content Area - Adjusted to take full width */}
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-6"> {/* Removed max-w-7xl, added responsive padding */}
+        {activeTab === 'manage' && renderManageEntities()}
+        {activeTab === 'reviews' && renderViewReviews()}
+      </main>
+    </div>
+  );
+
+  return (
+    <div className="font-sans antialiased text-gray-900">
+      {/* Tailwind CSS CDN */}
+      <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+      {/* Inter font from Google Fonts */}
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <style>
+        {`
+          body {
+            font-family: 'Inter', sans-serif;
+          }
+        `}
+      </style>
+
+      {currentView === 'login' ? renderLogin() : renderDashboard()}
+    </div>
+  );
+};
+
+export default App;

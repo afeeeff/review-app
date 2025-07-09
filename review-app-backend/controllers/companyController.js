@@ -22,7 +22,7 @@ const generateToken = (id, role, companyId = null, branchId = null) => {
 // @route   POST /api/company/branches
 // @access  Private (Company Admin only)
 exports.createBranch = async (req, res) => {
-  const { branchName, adminEmail, adminPassword } = req.body;
+  const { branchName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
 
   if (!companyId) {
@@ -66,6 +66,7 @@ exports.createBranch = async (req, res) => {
       name: branchName,
       company: company._id,
       branchAdmin: branchAdminUser._id,
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // 6. Update the branch admin user with the branch ID
@@ -81,6 +82,7 @@ exports.createBranch = async (req, res) => {
         _id: branch._id,
         name: branch.name,
         company: branch.company,
+        notificationEmails: branch.notificationEmails, // Include in response
       },
       branchAdmin: {
         _id: branchAdminUser._id,
@@ -105,7 +107,8 @@ exports.getBranches = async (req, res) => {
   }
 
   try {
-    const branches = await Branch.find({ company: companyId }).populate('branchAdmin', 'email');
+    // Populate admin email and notification emails
+    const branches = await Branch.find({ company: companyId }).populate('branchAdmin', 'email').select('+notificationEmails');
     res.status(200).json(branches);
   } catch (error) {
     console.error('Error fetching branches (Company Admin):', error);
@@ -118,7 +121,7 @@ exports.getBranches = async (req, res) => {
 // @access  Private (Company Admin only)
 exports.updateBranch = async (req, res) => {
   const { id } = req.params; // Branch ID
-  const { branchName, adminEmail, adminPassword } = req.body;
+  const { branchName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
 
   if (!companyId) {
@@ -164,6 +167,11 @@ exports.updateBranch = async (req, res) => {
     }
     await branchAdminUser.save();
 
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      branch.notificationEmails = notificationEmails;
+    }
+
     await branch.save();
 
     res.status(200).json({
@@ -171,6 +179,7 @@ exports.updateBranch = async (req, res) => {
       branch: {
         _id: branch._id,
         name: branch.name,
+        notificationEmails: branch.notificationEmails, // Include in response
       },
       branchAdmin: {
         _id: branchAdminUser._id,
@@ -254,7 +263,7 @@ exports.deleteBranch = async (req, res) => {
 // @access  Private (Company Admin only)
 exports.createClient = async (req, res) => {
   const { branchId } = req.params; // Optional branchId
-  const { clientEmail, clientPassword, customerName, customerMobile } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
 
   if (!companyId) {
@@ -293,8 +302,9 @@ exports.createClient = async (req, res) => {
       role: 'client',
       company: companyId, // Client is always linked to the company admin's company
       branch: parentBranchId, // Will be ObjectId or null
-      customerName: customerName, // Assuming these fields are now on the User model
-      customerMobile: customerMobile, // Assuming these fields are now on the User model
+      customerName: customerName,
+      customerMobile: customerMobile,
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // Generate token for the newly created client
@@ -309,6 +319,7 @@ exports.createClient = async (req, res) => {
         branch: clientUser.branch,
         customerName: clientUser.customerName,
         customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
         token: clientToken,
       },
     });
@@ -355,7 +366,8 @@ exports.getClients = async (req, res) => {
   try {
     const clients = await User.find(query)
       .populate('company', 'name')
-      .populate('branch', 'name');
+      .populate('branch', 'name')
+      .select('+notificationEmails'); // Select notification emails
     res.status(200).json(clients);
   } catch (error) {
     console.error('Error fetching clients (Company Admin):', error);
@@ -368,7 +380,7 @@ exports.getClients = async (req, res) => {
 // @access  Private (Company Admin only)
 exports.updateClient = async (req, res) => {
   const { id } = req.params; // Client User ID
-  const { clientEmail, clientPassword, customerName, customerMobile, branchId } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, branchId, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
 
   if (!companyId) {
@@ -415,6 +427,11 @@ exports.updateClient = async (req, res) => {
         }
     }
 
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      clientUser.notificationEmails = notificationEmails;
+    }
+
     await clientUser.save();
 
     res.status(200).json({
@@ -426,6 +443,7 @@ exports.updateClient = async (req, res) => {
         branch: clientUser.branch,
         customerName: clientUser.customerName,
         customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
       },
     });
   } catch (error) {
@@ -536,7 +554,7 @@ exports.getCompanyReviews = async (req, res) => {
       .populate('client', 'email customerName customerMobile') // Populate client email, name, mobile
       .populate('company', 'name')
       .populate('branch', 'name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }); // Sort by newest first
 
     res.status(200).json(reviews);
   } catch (error) {

@@ -36,6 +36,7 @@ const sendEmail = async (mailOptions) => {
 /**
  * Sends an email notification for a customer review with a rating between 1 and 8.
  * @param {object} reviewDetails - Object containing all details for the email.
+ * @param {string[]} reviewDetails.recipientEmails - Array of email addresses to send the notification to.
  * @param {number} reviewDetails.rating - The submitted customer rating.
  * @param {string} reviewDetails.transcribedText - The transcribed text of the voice review.
  * @param {string} reviewDetails.translatedText - The translated text of the voice review.
@@ -47,6 +48,7 @@ const sendEmail = async (mailOptions) => {
  */
 exports.sendReviewEmail = async (reviewDetails) => {
   const {
+    recipientEmails, // NEW: Dynamic recipient emails
     rating,
     transcribedText,
     translatedText,
@@ -54,15 +56,14 @@ exports.sendReviewEmail = async (reviewDetails) => {
     invoiceData,
     customerName,
     customerMobile,
-    invoiceFileUrl // Added invoiceFileUrl to reviewDetails
+    invoiceFileUrl
   } = reviewDetails;
 
-  // TODO: In the future, fetch these recipient emails from a database (e.g., superuser settings)
-  // For now, hardcode them:
-  const recipientEmails = [
-    'afeefsyed30@gmail.com', // Example support email
-    'manager@yourcompany.com'  // Example manager email
-  ];
+  // Ensure recipientEmails is an array and not empty
+  if (!recipientEmails || recipientEmails.length === 0) {
+    console.warn('sendReviewEmail called with no recipient emails. Skipping email sending.');
+    return;
+  }
 
   // Construct the HTML content for the email
   const emailHtml = `

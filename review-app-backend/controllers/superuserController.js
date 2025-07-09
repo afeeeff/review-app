@@ -22,7 +22,7 @@ const generateToken = (id, role, companyId = null, branchId = null) => {
 // @route   POST /api/superuser/companies
 // @access  Private (Superuser only)
 exports.createCompany = async (req, res) => {
-  const { companyName, adminEmail, adminPassword } = req.body;
+  const { companyName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
 
   if (!companyName || !adminEmail || !adminPassword) {
     return res.status(400).json({ message: 'Please enter company name, admin email, and admin password.' });
@@ -53,6 +53,7 @@ exports.createCompany = async (req, res) => {
     const company = await Company.create({
       name: companyName,
       companyAdmin: companyAdminUser._id, // Link to the admin user
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // 5. Update the company admin user with the company ID
@@ -67,6 +68,7 @@ exports.createCompany = async (req, res) => {
       company: {
         _id: company._id,
         name: company.name,
+        notificationEmails: company.notificationEmails, // Include in response
       },
       companyAdmin: {
         _id: companyAdminUser._id,
@@ -85,7 +87,8 @@ exports.createCompany = async (req, res) => {
 // @access  Private (Superuser only)
 exports.getAllCompanies = async (req, res) => {
   try {
-    const companies = await Company.find().populate('companyAdmin', 'email'); // Populate admin email
+    // Populate admin email and notification emails
+    const companies = await Company.find().populate('companyAdmin', 'email').select('+notificationEmails');
     res.status(200).json(companies);
   } catch (error) {
     console.error('Error fetching companies:', error);
@@ -98,7 +101,7 @@ exports.getAllCompanies = async (req, res) => {
 // @access  Private (Superuser only)
 exports.updateCompany = async (req, res) => {
   const { id } = req.params;
-  const { companyName, adminEmail, adminPassword } = req.body;
+  const { companyName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
 
   try {
     const company = await Company.findById(id);
@@ -134,6 +137,11 @@ exports.updateCompany = async (req, res) => {
     }
     await companyAdminUser.save(); // Save updated admin user
 
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      company.notificationEmails = notificationEmails;
+    }
+
     await company.save(); // Save updated company
 
     res.status(200).json({
@@ -141,6 +149,7 @@ exports.updateCompany = async (req, res) => {
       company: {
         _id: company._id,
         name: company.name,
+        notificationEmails: company.notificationEmails, // Include in response
       },
       companyAdmin: {
         _id: companyAdminUser._id,
@@ -227,7 +236,7 @@ exports.deleteCompany = async (req, res) => {
 // @access  Private (Superuser only)
 exports.createBranch = async (req, res) => {
   const { companyId } = req.params;
-  const { branchName, adminEmail, adminPassword } = req.body;
+  const { branchName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
 
   if (!branchName || !adminEmail || !adminPassword) {
     return res.status(400).json({ message: 'Please enter branch name, admin email, and admin password.' });
@@ -265,6 +274,7 @@ exports.createBranch = async (req, res) => {
       name: branchName,
       company: company._id,
       branchAdmin: branchAdminUser._id,
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // 3. Update the branch admin user with the branch ID
@@ -280,6 +290,7 @@ exports.createBranch = async (req, res) => {
         _id: branch._id,
         name: branch.name,
         company: branch.company,
+        notificationEmails: branch.notificationEmails, // Include in response
       },
       branchAdmin: {
         _id: branchAdminUser._id,
@@ -299,7 +310,8 @@ exports.createBranch = async (req, res) => {
 exports.getBranchesByCompany = async (req, res) => {
   const { companyId } = req.params;
   try {
-    const branches = await Branch.find({ company: companyId }).populate('branchAdmin', 'email');
+    // Populate admin email and notification emails
+    const branches = await Branch.find({ company: companyId }).populate('branchAdmin', 'email').select('+notificationEmails');
     res.status(200).json(branches);
   } catch (error) {
     console.error('Error fetching branches:', error);
@@ -312,7 +324,7 @@ exports.getBranchesByCompany = async (req, res) => {
 // @access  Private (Superuser only)
 exports.updateBranch = async (req, res) => {
   const { id } = req.params;
-  const { branchName, adminEmail, adminPassword } = req.body;
+  const { branchName, adminEmail, adminPassword, notificationEmails } = req.body; // Added notificationEmails
 
   try {
     const branch = await Branch.findById(id);
@@ -348,6 +360,11 @@ exports.updateBranch = async (req, res) => {
     }
     await branchAdminUser.save();
 
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      branch.notificationEmails = notificationEmails;
+    }
+
     await branch.save();
 
     res.status(200).json({
@@ -355,6 +372,7 @@ exports.updateBranch = async (req, res) => {
       branch: {
         _id: branch._id,
         name: branch.name,
+        notificationEmails: branch.notificationEmails, // Include in response
       },
       branchAdmin: {
         _id: branchAdminUser._id,
@@ -428,7 +446,7 @@ exports.deleteBranch = async (req, res) => {
 // @access  Private (Superuser only)
 exports.createClient = async (req, res) => {
   const { branchId, companyId } = req.params; // One of these will be present
-  const { clientEmail, clientPassword, customerName, customerMobile } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, notificationEmails } = req.body; // Added notificationEmails
 
   if (!clientEmail || !clientPassword || !customerName || !customerMobile) {
     return res.status(400).json({ message: 'Please enter client email, password, customer name, and mobile.' });
@@ -469,8 +487,9 @@ exports.createClient = async (req, res) => {
       role: 'client',
       company: parentCompanyId,
       branch: parentBranchId,
-      customerName: customerName, // Added customerName to User model
-      customerMobile: customerMobile, // Added customerMobile to User model
+      customerName: customerName,
+      customerMobile: customerMobile,
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // Generate token for the newly created client
@@ -483,8 +502,9 @@ exports.createClient = async (req, res) => {
         email: clientUser.email,
         company: clientUser.company,
         branch: clientUser.branch,
-        customerName: clientUser.customerName, // Uncomment if added to User schema
-        customerMobile: clientUser.customerMobile, // Uncomment if added to User schema
+        customerName: clientUser.customerName,
+        customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
         token: clientToken,
       },
     });
@@ -515,7 +535,8 @@ exports.getClients = async (req, res) => {
     // Populate company and branch names, and also customerName and customerMobile from the User model
     const clients = await User.find(query)
       .populate('company', 'name')
-      .populate('branch', 'name');
+      .populate('branch', 'name')
+      .select('+notificationEmails'); // Select notification emails
     res.status(200).json(clients);
   } catch (error) {
     console.error('Error fetching clients:', error);
@@ -528,7 +549,7 @@ exports.getClients = async (req, res) => {
 // @access  Private (Superuser only)
 exports.updateClient = async (req, res) => {
   const { id } = req.params;
-  const { clientEmail, clientPassword, customerName, customerMobile, branchId, companyId } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, branchId, companyId, notificationEmails } = req.body; // Added notificationEmails
 
   try {
     const clientUser = await User.findById(id).select('+password');
@@ -548,20 +569,35 @@ exports.updateClient = async (req, res) => {
         clientUser.password = clientPassword; // Pre-save hook will hash
     }
     // Update customerName and customerMobile if you add them to User schema
-    if (customerName) clientUser.customerName = customerName; // Added
-    if (customerMobile) clientUser.customerMobile = customerMobile; // Added
+    if (customerName) clientUser.customerName = customerName;
+    if (customerMobile) clientUser.customerMobile = customerMobile;
 
     // Allow superuser to reassign client to a different branch/company
-    if (branchId) {
-        const newBranch = await Branch.findById(branchId);
-        if (!newBranch) return res.status(404).json({ message: 'New branch not found.' });
-        clientUser.branch = newBranch._id;
-        clientUser.company = newBranch.company; // Update company to match new branch's company
-    } else if (companyId) { // If branchId is null but companyId is provided, assign directly to company
+    if (branchId !== undefined) { // Check if branchId is explicitly provided (can be null)
+        if (branchId) {
+            const newBranch = await Branch.findById(branchId);
+            if (!newBranch) return res.status(404).json({ message: 'New branch not found.' });
+            clientUser.branch = newBranch._id;
+            clientUser.company = newBranch.company; // Update company to match new branch's company
+        } else {
+            // If branchId is null, assign directly to company (if companyId is provided)
+            if (companyId) {
+                const newCompany = await Company.findById(companyId);
+                if (!newCompany) return res.status(404).json({ message: 'New company not found.' });
+                clientUser.company = newCompany._id;
+            }
+            clientUser.branch = null; // Ensure branch is null if assigned directly to company
+        }
+    } else if (companyId !== undefined) { // If branchId is not provided, but companyId is
         const newCompany = await Company.findById(companyId);
         if (!newCompany) return res.status(404).json({ message: 'New company not found.' });
         clientUser.company = newCompany._id;
         clientUser.branch = null; // Ensure branch is null if assigned directly to company
+    }
+
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      clientUser.notificationEmails = notificationEmails;
     }
 
     await clientUser.save();
@@ -573,8 +609,9 @@ exports.updateClient = async (req, res) => {
         email: clientUser.email,
         company: clientUser.company,
         branch: clientUser.branch,
-        customerName: clientUser.customerName, // Added
-        customerMobile: clientUser.customerMobile, // Added
+        customerName: clientUser.customerName,
+        customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
       },
     });
   } catch (error) {

@@ -16,6 +16,19 @@ const CompanySchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Company admin user ID is required'],
     unique: true // A user can only be an admin for one company
+  },
+  // NEW: Array of emails to send review notifications to for this company
+  notificationEmails: {
+    type: [String], // Array of strings
+    default: [],    // Default to an empty array
+    validate: {
+      validator: function(v) {
+        // Optional: Basic email format validation for each email in the array
+        if (!v || v.length === 0) return true; // Allow empty array
+        return v.every(email => /.+@.+\..+/.test(email));
+      },
+      message: props => `${props.value} contains invalid email addresses!`
+    }
   }
 }, {
   timestamps: true // Adds createdAt and updatedAt fields

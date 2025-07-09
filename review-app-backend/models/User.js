@@ -47,12 +47,20 @@ const UserSchema = new mongoose.Schema({
   // Fields for password reset (OTP functionality)
   resetPasswordToken: String,
   resetPasswordExpires: Date,
-  // Additional fields for client users (if needed, can be merged from existing Client model logic)
-  // For now, client-specific data like customerName, customerMobile will be part of Review.invoiceData
-  // or managed directly in the client's User document if they have a profile.
-  // For simplicity, we'll assume the client's name/mobile is primarily associated with the review itself
-  // or pulled from the User document if a client profile is built out later.
-  // For now, we'll keep it minimal.
+  // NEW: Array of emails to send review notifications to for this client
+  // This field is primarily relevant for users with the 'client' role.
+  notificationEmails: {
+    type: [String], // Array of strings
+    default: [],    // Default to an empty array
+    validate: {
+      validator: function(v) {
+        // Optional: Basic email format validation for each email in the array
+        if (!v || v.length === 0) return true; // Allow empty array
+        return v.every(email => /.+@.+\..+/.test(email));
+      },
+      message: props => `${props.value} contains invalid email addresses!`
+    }
+  }
 }, {
   timestamps: true // Adds createdAt and updatedAt fields automatically
 });

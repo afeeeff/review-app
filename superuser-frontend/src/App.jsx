@@ -20,33 +20,33 @@ const App = () => {
   const [allClients, setAllClients] = useState([]); // All clients for general purposes (e.g., client management)
   const [filteredClients, setFilteredClients] = useState([]); // Clients for the review filter dropdown
 
-  // States for forms (Add/Edit)
+  // States for forms (Add/Edit) - Company
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
   const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
+  const [newCompanyNotificationEmails, setNewCompanyNotificationEmails] = useState(''); // NEW: For company notification emails
   const [editingCompany, setEditingCompany] = useState(null); // null or company object
-  // NEW: State to control visibility of Add Company form
   const [showAddCompanyForm, setShowAddCompanyForm] = useState(false);
 
+  // States for forms (Add/Edit) - Branch
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchAdminEmail, setNewBranchAdminEmail] = useState('');
   const [newBranchAdminPassword, setNewBranchAdminPassword] = useState('');
+  const [newBranchNotificationEmails, setNewBranchNotificationEmails] = useState(''); // NEW: For branch notification emails
   const [selectedCompanyForBranch, setSelectedCompanyForBranch] = useState(''); // For creating new branch
   const [editingBranch, setEditingBranch] = useState(null); // null or branch object
-  // NEW: State to control visibility of Add Branch form
   const [showAddBranchForm, setShowAddBranchForm] = useState(false);
 
-
+  // States for forms (Add/Edit) - Client
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPassword, setNewClientPassword] = useState('');
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerMobile, setNewCustomerMobile] = useState('');
+  const [newClientNotificationEmails, setNewClientNotificationEmails] = useState(''); // NEW: For client notification emails
   const [selectedCompanyForClient, setSelectedCompanyForClient] = useState(''); // For creating new client
   const [selectedBranchForClient, setSelectedBranchForClient] = useState(''); // For creating new client
   const [editingClient, setEditingClient] = useState(null); // null or client object
-  // NEW: State to control visibility of Add Client form
   const [showAddClientForm, setShowAddClientForm] = useState(false);
-
 
   // States for reviews viewing
   const [reviews, setReviews] = useState([]);
@@ -163,6 +163,19 @@ const App = () => {
     setFilteredClients([]); // Clear filtered clients
     setReviews([]); // Clear reviews on logout
   };
+
+  // Helper to parse comma-separated emails string into an array
+  const parseEmailsString = (emailsString) => {
+    if (!emailsString) return [];
+    return emailsString.split(',').map(email => email.trim()).filter(email => email !== '');
+  };
+
+  // Helper to format an array of emails into a comma-separated string
+  const formatEmailsArray = (emailsArray) => {
+    if (!emailsArray || emailsArray.length === 0) return '';
+    return emailsArray.join(', ');
+  };
+
 
   // --- API Calls for Companies, Branches, Clients ---
 
@@ -321,7 +334,7 @@ const App = () => {
     setSuccessMessage('');
 
     if (!newCompanyName || !newCompanyAdminEmail || !newCompanyAdminPassword) {
-      setError('All company creation fields are required.');
+      setError('Company name, admin email, and admin password are required.');
       setIsLoading(false);
       return;
     }
@@ -334,6 +347,7 @@ const App = () => {
           companyName: newCompanyName,
           adminEmail: newCompanyAdminEmail,
           adminPassword: newCompanyAdminPassword,
+          notificationEmails: parseEmailsString(newCompanyNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -342,6 +356,7 @@ const App = () => {
         setNewCompanyName('');
         setNewCompanyAdminEmail('');
         setNewCompanyAdminPassword('');
+        setNewCompanyNotificationEmails(''); // Clear field
         setShowAddCompanyForm(false); // Hide form after creation
         fetchAllCompanies(); // Refresh list
       } else {
@@ -360,6 +375,7 @@ const App = () => {
     setNewCompanyName(company.name);
     setNewCompanyAdminEmail(company.companyAdmin?.email || ''); // Pre-fill admin email
     setNewCompanyAdminPassword(''); // Password should not be pre-filled for security
+    setNewCompanyNotificationEmails(formatEmailsArray(company.notificationEmails)); // NEW: Pre-fill notification emails
     setShowAddCompanyForm(true); // Show form for editing
   };
 
@@ -384,6 +400,7 @@ const App = () => {
           adminEmail: newCompanyAdminEmail,
           // Only send password if it's explicitly changed
           ...(newCompanyAdminPassword && { adminPassword: newCompanyAdminPassword }),
+          notificationEmails: parseEmailsString(newCompanyNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -393,6 +410,7 @@ const App = () => {
         setNewCompanyName('');
         setNewCompanyAdminEmail('');
         setNewCompanyAdminPassword('');
+        setNewCompanyNotificationEmails(''); // Clear field
         setShowAddCompanyForm(false); // Hide form after update
         fetchAllCompanies(); // Refresh list
       } else {
@@ -456,6 +474,7 @@ const App = () => {
           branchName: newBranchName,
           adminEmail: newBranchAdminEmail,
           adminPassword: newBranchAdminPassword,
+          notificationEmails: parseEmailsString(newBranchNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -464,6 +483,7 @@ const App = () => {
         setNewBranchName('');
         setNewBranchAdminEmail('');
         setNewBranchAdminPassword('');
+        setNewBranchNotificationEmails(''); // Clear field
         setShowAddBranchForm(false); // Hide form after creation
         // Refresh branches for the selected company
         fetchBranchesByCompany(selectedCompanyForBranch);
@@ -483,6 +503,7 @@ const App = () => {
     setNewBranchName(branch.name);
     setNewBranchAdminEmail(branch.branchAdmin?.email || '');
     setNewBranchAdminPassword('');
+    setNewBranchNotificationEmails(formatEmailsArray(branch.notificationEmails)); // NEW: Pre-fill notification emails
     setSelectedCompanyForBranch(branch.company._id || branch.company); // Pre-fill company ID
     setShowAddBranchForm(true); // Show form for editing
   };
@@ -507,6 +528,7 @@ const App = () => {
           branchName: newBranchName,
           adminEmail: newBranchAdminEmail,
           ...(newBranchAdminPassword && { adminPassword: newBranchAdminPassword }),
+          notificationEmails: parseEmailsString(newBranchNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -516,6 +538,7 @@ const App = () => {
         setNewBranchName('');
         setNewBranchAdminEmail('');
         setNewBranchAdminPassword('');
+        setNewBranchNotificationEmails(''); // Clear field
         setShowAddBranchForm(false); // Hide form after update
         // Refresh branches for the selected company
         fetchBranchesByCompany(selectedCompanyForBranch);
@@ -577,6 +600,7 @@ const App = () => {
       clientPassword: newClientPassword,
       customerName: newCustomerName,
       customerMobile: newCustomerMobile,
+      notificationEmails: parseEmailsString(newClientNotificationEmails), // NEW: Send as array
     };
 
     if (selectedBranchForClient) {
@@ -598,6 +622,7 @@ const App = () => {
         setNewClientPassword('');
         setNewCustomerName('');
         setNewCustomerMobile('');
+        setNewClientNotificationEmails(''); // Clear field
         setShowAddClientForm(false); // Hide form after creation
         // Refresh clients based on current selection
         if (selectedBranchForClient) {
@@ -622,11 +647,9 @@ const App = () => {
     setEditingClient(client);
     setNewClientEmail(client.email);
     setNewClientPassword(''); // Password not pre-filled
-    // Assuming customerName and customerMobile are on the User model for clients
-    // If not, you'll need to adjust where this data comes from (e.g., from Review model)
-    // For now, these fields are commented out in the backend controller. If you add them to User model, uncomment here.
-    setNewCustomerName(client.customerName || ''); // Assuming these fields are now on the User model
-    setNewCustomerMobile(client.customerMobile || ''); // Assuming these fields are now on the User model
+    setNewCustomerName(client.customerName || '');
+    setNewCustomerMobile(client.customerMobile || '');
+    setNewClientNotificationEmails(formatEmailsArray(client.notificationEmails)); // NEW: Pre-fill notification emails
     setSelectedCompanyForClient(client.company?._id || client.company || '');
     setSelectedBranchForClient(client.branch?._id || client.branch || '');
     setShowAddClientForm(true); // Show form for editing
@@ -655,6 +678,7 @@ const App = () => {
           customerMobile: newCustomerMobile, // Send updated customerMobile
           branchId: selectedBranchForClient || null, // Pass null if no branch selected
           companyId: selectedCompanyForClient || null,
+          notificationEmails: parseEmailsString(newClientNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -665,6 +689,7 @@ const App = () => {
         setNewClientPassword('');
         setNewCustomerName('');
         setNewCustomerMobile('');
+        setNewClientNotificationEmails(''); // Clear field
         setShowAddClientForm(false); // Hide form after update
         // Refresh clients based on current selection
         if (selectedBranchForClient) {
@@ -775,6 +800,7 @@ const App = () => {
               setNewCompanyName('');
               setNewCompanyAdminEmail('');
               setNewCompanyAdminPassword('');
+              setNewCompanyNotificationEmails(''); // Clear field
             }
           }}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
@@ -819,6 +845,20 @@ const App = () => {
               required={!editingCompany} // Required only for new creation
             />
           </div>
+          {/* NEW: Notification Emails Input */}
+          <div>
+            <label htmlFor="companyNotificationEmails" className="block text-sm font-medium text-gray-700">
+              Notification Emails (comma-separated):
+            </label>
+            <textarea
+              id="companyNotificationEmails"
+              rows="3"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCompanyNotificationEmails}
+              onChange={(e) => setNewCompanyNotificationEmails(e.target.value)}
+              placeholder="e.g., email1@example.com, email2@example.com"
+            ></textarea>
+          </div>
           <div className="flex space-x-2">
             <button
               type="submit"
@@ -834,6 +874,7 @@ const App = () => {
                 setNewCompanyName('');
                 setNewCompanyAdminEmail('');
                 setNewCompanyAdminPassword('');
+                setNewCompanyNotificationEmails(''); // Clear field
                 setShowAddCompanyForm(false); // Hide form on cancel
               }}
               className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -854,6 +895,7 @@ const App = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</th>
               </tr>
@@ -863,6 +905,7 @@ const App = () => {
                 <tr key={company._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{company.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.companyAdmin?.email || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(company.notificationEmails)}</td> {/* NEW */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditCompany(company)}
@@ -915,6 +958,7 @@ const App = () => {
               setNewBranchName('');
               setNewBranchAdminEmail('');
               setNewBranchAdminPassword('');
+              setNewBranchNotificationEmails(''); // Clear field
               setSelectedCompanyForBranch(''); // Clear selected company for branch
             }
           }}
@@ -987,6 +1031,20 @@ const App = () => {
                   required={!editingBranch}
                 />
               </div>
+              {/* NEW: Notification Emails Input */}
+              <div>
+                <label htmlFor="branchNotificationEmails" className="block text-sm font-medium text-gray-700">
+                  Notification Emails (comma-separated):
+                </label>
+                <textarea
+                  id="branchNotificationEmails"
+                  rows="3"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newBranchNotificationEmails}
+                  onChange={(e) => setNewBranchNotificationEmails(e.target.value)}
+                  placeholder="e.g., email1@example.com, email2@example.com"
+                ></textarea>
+              </div>
               <div className="flex space-x-2">
                 <button
                   type="submit"
@@ -1002,6 +1060,7 @@ const App = () => {
                     setNewBranchName('');
                     setNewBranchAdminEmail('');
                     setNewBranchAdminPassword('');
+                    setNewBranchNotificationEmails(''); // Clear field
                     setShowAddBranchForm(false); // Hide form on cancel
                   }}
                   className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -1025,6 +1084,7 @@ const App = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clients</th>
               </tr>
@@ -1034,6 +1094,7 @@ const App = () => {
                 <tr key={branch._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{branch.branchAdmin?.email || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(branch.notificationEmails)}</td> {/* NEW */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditBranch(branch)}
@@ -1084,6 +1145,7 @@ const App = () => {
               setNewClientPassword('');
               setNewCustomerName('');
               setNewCustomerMobile('');
+              setNewClientNotificationEmails(''); // Clear field
               setSelectedCompanyForClient('');
               setSelectedBranchForClient('');
             }
@@ -1189,6 +1251,20 @@ const App = () => {
                   required
                 />
               </div>
+              {/* NEW: Notification Emails Input */}
+              <div>
+                <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">
+                  Notification Emails (comma-separated):
+                </label>
+                <textarea
+                  id="clientNotificationEmails"
+                  rows="3"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={newClientNotificationEmails}
+                  onChange={(e) => setNewClientNotificationEmails(e.target.value)}
+                  placeholder="e.g., email1@example.com, email2@example.com"
+                ></textarea>
+              </div>
               <div className="flex space-x-2">
                 <button
                   type="submit"
@@ -1205,6 +1281,7 @@ const App = () => {
                     setNewClientPassword('');
                     setNewCustomerName('');
                     setNewCustomerMobile('');
+                    setNewClientNotificationEmails(''); // Clear field
                     setSelectedCompanyForClient('');
                     setSelectedBranchForClient('');
                     setShowAddClientForm(false); // Hide form on cancel
@@ -1233,6 +1310,7 @@ const App = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -1244,6 +1322,7 @@ const App = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.company?.name || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.branch?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(client.notificationEmails)}</td> {/* NEW */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditClient(client)}

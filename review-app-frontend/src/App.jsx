@@ -604,10 +604,13 @@ const App = () => {
 
       if (response.ok) {
         if (rating >= 9) {
+          setFeedbackType('positive'); // Set feedback type for styling
           setSubmissionMessage('Thank you for your excellent feedback! We appreciate your high rating.');
         } else if (rating >= 6) {
+          setFeedbackType('neutral'); // Set feedback type for styling
           setSubmissionMessage('Thank you for your feedback! We are always striving to improve.');
         } else {
+          setFeedbackType('negative'); // Set feedback type for styling
           setSubmissionMessage('Thank you for your feedback. We are sorry to hear about your experience and will use your input to improve.');
         }
         setCurrentView('submissionSuccess');
@@ -639,7 +642,7 @@ const App = () => {
     if (rating === 5) return '😕';
     if (rating === 6) return '🙂';
     if (rating === 7) return '😊';
-    if (rating === 8) return '😄';
+    if (rating === 8) return '�';
     if (rating === 9) return '🤩';
     if (rating === 10) return '✨';
     return '';

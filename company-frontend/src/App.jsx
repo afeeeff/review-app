@@ -20,17 +20,20 @@ const App = () => {
   const [allClients, setAllClients] = useState([]); // All clients for management tab
   const [filteredClients, setFilteredClients] = useState([]); // Clients for review filter dropdown
 
-  // States for forms (Add/Edit)
+  // States for forms (Add/Edit) - Branch
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchAdminEmail, setNewBranchAdminEmail] = useState('');
   const [newBranchAdminPassword, setNewBranchAdminPassword] = useState('');
+  const [newBranchNotificationEmails, setNewBranchNotificationEmails] = useState(''); // NEW: For branch notification emails
   const [editingBranch, setEditingBranch] = useState(null); // null or branch object
   const [showAddBranchForm, setShowAddBranchForm] = useState(false); // NEW: State for showing Add Branch form
 
+  // States for forms (Add/Edit) - Client
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPassword, setNewClientPassword] = useState('');
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerMobile, setNewCustomerMobile] = useState('');
+  const [newClientNotificationEmails, setNewClientNotificationEmails] = useState(''); // NEW: For client notification emails
   const [selectedBranchForClient, setSelectedBranchForClient] = useState(''); // For creating new client under a branch
   const [editingClient, setEditingClient] = useState(null); // null or client object
   const [showAddClientForm, setShowAddClientForm] = useState(false); // NEW: State for showing Add Client form
@@ -64,6 +67,18 @@ const App = () => {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${userData?.token}`,
   });
+
+  // Helper to parse comma-separated emails string into an array
+  const parseEmailsString = (emailsString) => {
+    if (!emailsString) return [];
+    return emailsString.split(',').map(email => email.trim()).filter(email => email !== '');
+  };
+
+  // Helper to format an array of emails into a comma-separated string
+  const formatEmailsArray = (emailsArray) => {
+    if (!emailsArray || emailsArray.length === 0) return '';
+    return emailsArray.join(', ');
+  };
 
   // Effect to check for stored token on component mount
   useEffect(() => {
@@ -285,6 +300,7 @@ const App = () => {
           branchName: newBranchName,
           adminEmail: newBranchAdminEmail,
           adminPassword: newBranchAdminPassword,
+          notificationEmails: parseEmailsString(newBranchNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -293,6 +309,7 @@ const App = () => {
         setNewBranchName('');
         setNewBranchAdminEmail('');
         setNewBranchAdminPassword('');
+        setNewBranchNotificationEmails(''); // Clear field
         setShowAddBranchForm(false); // Hide form after creation
         fetchAllBranches(); // Refresh list
       } else {
@@ -311,6 +328,7 @@ const App = () => {
     setNewBranchName(branch.name);
     setNewBranchAdminEmail(branch.branchAdmin?.email || '');
     setNewBranchAdminPassword('');
+    setNewBranchNotificationEmails(formatEmailsArray(branch.notificationEmails)); // NEW: Pre-fill notification emails
     setShowAddBranchForm(true); // Show form for editing
   };
 
@@ -334,6 +352,7 @@ const App = () => {
           branchName: newBranchName,
           adminEmail: newBranchAdminEmail,
           ...(newBranchAdminPassword && { adminPassword: newBranchAdminPassword }),
+          notificationEmails: parseEmailsString(newBranchNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -343,6 +362,7 @@ const App = () => {
         setNewBranchName('');
         setNewBranchAdminEmail('');
         setNewBranchAdminPassword('');
+        setNewBranchNotificationEmails(''); // Clear field
         setShowAddBranchForm(false); // Hide form after update
         fetchAllBranches(); // Refresh list
       } else {
@@ -407,6 +427,7 @@ const App = () => {
       clientPassword: newClientPassword,
       customerName: newCustomerName,
       customerMobile: newCustomerMobile,
+      notificationEmails: parseEmailsString(newClientNotificationEmails), // NEW: Send as array
     };
 
     try {
@@ -422,6 +443,7 @@ const App = () => {
         setNewClientPassword('');
         setNewCustomerName('');
         setNewCustomerMobile('');
+        setNewClientNotificationEmails(''); // Clear field
         setSelectedBranchForClient('');
         setShowAddClientForm(false); // Hide form after creation
         // Refresh clients based on current selection
@@ -447,6 +469,7 @@ const App = () => {
     setNewClientPassword(''); // Password not pre-filled
     setNewCustomerName(client.customerName || '');
     setNewCustomerMobile(client.customerMobile || '');
+    setNewClientNotificationEmails(formatEmailsArray(client.notificationEmails)); // NEW: Pre-fill notification emails
     setSelectedBranchForClient(client.branch?._id || client.branch || '');
     setShowAddClientForm(true); // Show form for editing
   };
@@ -473,6 +496,7 @@ const App = () => {
           customerName: newCustomerName,
           customerMobile: newCustomerMobile,
           branchId: selectedBranchForClient || null, // Pass null if no branch selected
+          notificationEmails: parseEmailsString(newClientNotificationEmails), // NEW: Send as array
         }),
       });
       const data = await response.json();
@@ -483,6 +507,7 @@ const App = () => {
         setNewClientPassword('');
         setNewCustomerName('');
         setNewCustomerMobile('');
+        setNewClientNotificationEmails(''); // Clear field
         setSelectedBranchForClient('');
         setShowAddClientForm(false); // Hide form after update
         // Refresh clients based on current selection
@@ -660,6 +685,7 @@ const App = () => {
               setNewBranchName('');
               setNewBranchAdminEmail('');
               setNewBranchAdminPassword('');
+              setNewBranchNotificationEmails(''); // Clear field
             }
           }}
           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
@@ -704,6 +730,20 @@ const App = () => {
               required={!editingBranch}
             />
           </div>
+          {/* NEW: Notification Emails Input */}
+          <div>
+            <label htmlFor="branchNotificationEmails" className="block text-sm font-medium text-gray-700">
+              Notification Emails (comma-separated):
+            </label>
+            <textarea
+              id="branchNotificationEmails"
+              rows="3"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newBranchNotificationEmails}
+              onChange={(e) => setNewBranchNotificationEmails(e.target.value)}
+              placeholder="e.g., email1@example.com, email2@example.com"
+            ></textarea>
+          </div>
           <div className="flex space-x-2">
             <button
               type="submit"
@@ -719,6 +759,7 @@ const App = () => {
                 setNewBranchName('');
                 setNewBranchAdminEmail('');
                 setNewBranchAdminPassword('');
+                setNewBranchNotificationEmails(''); // Clear field
                 setShowAddBranchForm(false); // Hide form on cancel
               }}
               className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -739,6 +780,7 @@ const App = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clients</th>
               </tr>
@@ -748,6 +790,7 @@ const App = () => {
                 <tr key={branch._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{branch.branchAdmin?.email || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(branch.notificationEmails)}</td> {/* NEW */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditBranch(branch)}
@@ -796,6 +839,7 @@ const App = () => {
               setNewClientPassword('');
               setNewCustomerName('');
               setNewCustomerMobile('');
+              setNewClientNotificationEmails(''); // Clear field
               setSelectedBranchForClient('');
             }
           }}
@@ -878,6 +922,20 @@ const App = () => {
               required
             />
           </div>
+          {/* NEW: Notification Emails Input */}
+          <div>
+            <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">
+              Notification Emails (comma-separated):
+            </label>
+            <textarea
+              id="clientNotificationEmails"
+              rows="3"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newClientNotificationEmails}
+              onChange={(e) => setNewClientNotificationEmails(e.target.value)}
+              placeholder="e.g., email1@example.com, email2@example.com"
+            ></textarea>
+          </div>
           <div className="flex space-x-2">
             <button
               type="submit"
@@ -894,6 +952,7 @@ const App = () => {
                 setNewClientPassword('');
                 setNewCustomerName('');
                 setNewCustomerMobile('');
+                setNewClientNotificationEmails(''); // Clear field
                 setSelectedBranchForClient('');
                 setShowAddClientForm(false); // Hide form on cancel
               }}
@@ -917,6 +976,7 @@ const App = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -927,6 +987,7 @@ const App = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerName || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.branch?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(client.notificationEmails)}</td> {/* NEW */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditClient(client)}

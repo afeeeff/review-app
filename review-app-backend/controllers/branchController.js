@@ -5,6 +5,7 @@ const Company = require('../models/Company'); // Needed for validation/populatio
 const Branch = require('../models/Branch');   // Needed for validation/population
 const Review = require('../models/Review');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose'); // Import mongoose for session
 
 // Helper function to generate JWT for newly created users
 const generateToken = (id, role, companyId = null, branchId = null) => {
@@ -21,7 +22,7 @@ const generateToken = (id, role, companyId = null, branchId = null) => {
 // @route   POST /api/branch/clients
 // @access  Private (Branch Admin only)
 exports.createClient = async (req, res) => {
-  const { clientEmail, clientPassword, customerName, customerMobile } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
   const branchId = req.user.branch;   // Get branch ID from authenticated user's token
 
@@ -55,6 +56,7 @@ exports.createClient = async (req, res) => {
       branch: branchId,   // Client is always linked to the branch admin's branch
       customerName: customerName,
       customerMobile: customerMobile,
+      notificationEmails: notificationEmails || [], // Save notification emails
     });
 
     // Generate token for the newly created client
@@ -69,6 +71,7 @@ exports.createClient = async (req, res) => {
         branch: clientUser.branch,
         customerName: clientUser.customerName,
         customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
         token: clientToken,
       },
     });
@@ -92,7 +95,8 @@ exports.getClients = async (req, res) => {
   try {
     const clients = await User.find({ role: 'client', company: companyId, branch: branchId })
       .populate('company', 'name')
-      .populate('branch', 'name');
+      .populate('branch', 'name')
+      .select('+notificationEmails'); // Select notification emails
     res.status(200).json(clients);
   } catch (error) {
     console.error('Error fetching clients (Branch Admin):', error);
@@ -105,7 +109,7 @@ exports.getClients = async (req, res) => {
 // @access  Private (Branch Admin only)
 exports.updateClient = async (req, res) => {
   const { id } = req.params; // Client User ID
-  const { clientEmail, clientPassword, customerName, customerMobile } = req.body;
+  const { clientEmail, clientPassword, customerName, customerMobile, notificationEmails } = req.body; // Added notificationEmails
   const companyId = req.user.company; // Get company ID from authenticated user's token
   const branchId = req.user.branch;   // Get branch ID from authenticated user's token
 
@@ -138,6 +142,11 @@ exports.updateClient = async (req, res) => {
     if (customerName) clientUser.customerName = customerName;
     if (customerMobile) clientUser.customerMobile = customerMobile;
 
+    // Update notification emails
+    if (notificationEmails !== undefined) { // Allow setting to empty array
+      clientUser.notificationEmails = notificationEmails;
+    }
+
     await clientUser.save();
 
     res.status(200).json({
@@ -149,6 +158,7 @@ exports.updateClient = async (req, res) => {
         branch: clientUser.branch,
         customerName: clientUser.customerName,
         customerMobile: clientUser.customerMobile,
+        notificationEmails: clientUser.notificationEmails, // Include in response
       },
     });
   } catch (error) {

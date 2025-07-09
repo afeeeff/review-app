@@ -1,6 +1,9 @@
 // review-app-backend/controllers/reviewController.js
 
 const Review = require('../models/Review');
+const User = require('../models/User'); // Import User model
+const Company = require('../models/Company'); // Import Company model
+const Branch = require('../models/Branch'); // Import Branch model
 const { Storage } = require('@google-cloud/storage');
 const { ImageAnnotatorClient } = require('@google-cloud/vision'); // Import Vision API
 const { SpeechClient } = require('@google-cloud/speech'); // Import Speech-to-Text API
@@ -404,19 +407,46 @@ exports.submitReview = async (req, res) => {
     await newReview.save();
     console.log(`Review saved: ${newReview._id}. Voice URL: ${newReview.voiceData}. Invoice URL: ${newReview.invoiceFileUrl}. Transcribed Text: ${newReview.transcribedText}`);
 
-    // --- NEW: Email Trigger for ratings 1-8 ---
+    // --- NEW: Dynamic Email Trigger for ratings 1-8 ---
     if (parseInt(rating) >= 1 && parseInt(rating) <= 8) {
       console.log(`Rating is ${rating}, triggering email notification.`);
-      await emailService.sendReviewEmail({
-        rating: parseInt(rating),
-        transcribedText: transcribedText,
-        voiceAudioUrl: voiceData || '',
-        invoiceData: updatedInvoiceData,
-        customerName: customerName,
-        customerMobile: customerMobile,
-      });
+
+      // Fetch notification emails from Client, Branch, and Company
+      const client = await User.findById(clientId).select('notificationEmails');
+      const branch = await Branch.findById(branchId).select('notificationEmails');
+      const company = await Company.findById(companyId).select('notificationEmails');
+
+      const recipientEmails = new Set(); // Use a Set to avoid duplicate emails
+
+      if (client && client.notificationEmails && client.notificationEmails.length > 0) {
+        client.notificationEmails.forEach(email => recipientEmails.add(email));
+      }
+      if (branch && branch.notificationEmails && branch.notificationEmails.length > 0) {
+        branch.notificationEmails.forEach(email => recipientEmails.add(email));
+      }
+      if (company && company.notificationEmails && company.notificationEmails.length > 0) {
+        company.notificationEmails.forEach(email => recipientEmails.add(email));
+      }
+
+      const finalRecipientEmails = Array.from(recipientEmails);
+      console.log('Sending review email to:', finalRecipientEmails);
+
+      if (finalRecipientEmails.length > 0) {
+        await emailService.sendReviewEmail({
+          recipientEmails: finalRecipientEmails, // Pass the dynamic list of recipients
+          rating: parseInt(rating),
+          transcribedText: transcribedText,
+          voiceAudioUrl: voiceData || '',
+          invoiceData: updatedInvoiceData,
+          customerName: customerName,
+          customerMobile: customerMobile,
+          invoiceFileUrl: invoiceFileUrl, // Ensure invoiceFileUrl is passed
+        });
+      } else {
+        console.warn('No notification emails configured for this review. Email not sent.');
+      }
     }
-    // --- END NEW EMAIL TRIGGER ---
+    // --- END NEW DYNAMIC EMAIL TRIGGER ---
 
     res.status(201).json({
       message: 'Review submitted successfully!',

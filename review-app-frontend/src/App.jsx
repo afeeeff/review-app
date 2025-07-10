@@ -56,7 +56,10 @@ const App = () => {
   const audioStreamRef = useRef(null); // Ref to hold the MediaStream object
 
   // Base URL for your backend API
-  const API_BASE_URL = 'http://localhost:5000/api'; // Make sure this matches your backend port
+  const API_BASE_URL =
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : 'https://review-app-backend-ekjk.onrender.com'; // Make sure this matches your backend port
 
   // Effect to check for token and user data on component mount and set initial view
   useEffect(() => {

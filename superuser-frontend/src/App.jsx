@@ -1504,10 +1504,7 @@ const App = () => {
 
   return (
     <div className="font-sans antialiased text-gray-900">
-      {/* Tailwind CSS CDN */}
-      <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-      {/* Inter font from Google Fonts */}
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      
       <style>
         {`
           body {

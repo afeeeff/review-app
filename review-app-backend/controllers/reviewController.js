@@ -12,29 +12,50 @@ const path = require('path');
 const emailService = require('../services/emailService'); // Import the new email service
 const mongoose = require('mongoose'); // Import mongoose for ObjectId
 
+// --- Dynamic Google Cloud Credentials Setup ---
+let googleCloudCredentials = null;
+try {
+  if (process.env.GOOGLE_CLOUD_KEY_BASE64) {
+    const keyFileContent = Buffer.from(process.env.GOOGLE_CLOUD_KEY_BASE64, 'base64').toString('utf8');
+    googleCloudCredentials = JSON.parse(keyFileContent);
+    console.log('Google Cloud credentials loaded from GOOGLE_CLOUD_KEY_BASE64 environment variable.');
+  } else {
+    console.warn('GOOGLE_CLOUD_KEY_BASE64 environment variable not found. Falling back to default authentication (e.g., GOOGLE_APPLICATION_CREDENTIALS file or ADC).');
+    // If GOOGLE_CLOUD_KEY_BASE64 is not set, Google Cloud libraries will automatically
+    // look for GOOGLE_APPLICATION_CREDENTIALS file or use Application Default Credentials.
+    // This is useful for local development where you might still use the file.
+    // No explicit keyFilename is needed here; the libraries handle it.
+  }
+} catch (error) {
+  console.error('Error parsing GOOGLE_CLOUD_KEY_BASE64:', error.message);
+  // If parsing fails, ensure credentials are null so the clients fall back or throw
+  googleCloudCredentials = null;
+}
+
 // Initialize Google Cloud Storage client
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  // Use the credentials object if successfully parsed, otherwise rely on default authentication
+  credentials: googleCloudCredentials,
 });
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
 // Initialize Google Cloud Vision API client
 const visionClient = new ImageAnnotatorClient({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  credentials: googleCloudCredentials,
 });
 
 // Initialize Google Cloud Speech-to-Text client
 const speechClient = new SpeechClient({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  credentials: googleCloudCredentials,
 });
 
 // Initialize Google Cloud Translation API client
 const translationClient = new TranslationServiceClient({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  credentials: googleCloudCredentials,
 });
 
 

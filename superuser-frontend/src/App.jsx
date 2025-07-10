@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
+
 // Main App component for the Superuser Interface
 const App = () => {
-  // State for managing the current view: 'login' or 'dashboard'
+  // State for managing the current view: 'login', 'dashboard', 'forgotPassword', 'resetPassword'
   const [currentView, setCurrentView] = useState('login');
   // State for login form inputs
   const [email, setEmail] = useState('');
@@ -60,6 +61,15 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // NEW: States for Forgot Password / OTP
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState('');
+  const [forgotPasswordError, setForgotPasswordError] = useState('');
+
 
   // Base URL for your backend API
   const API_BASE_URL = 'http://localhost:5000/api'; // IMPORTANT: Change this to your backend URL in production
@@ -765,7 +775,6 @@ const App = () => {
       if (filterEndDate) {
         url += `endDate=${filterEndDate}&`;
       }
-
       const response = await fetch(url, {
         headers: getAuthHeaders(),
       });
@@ -785,8 +794,92 @@ const App = () => {
     }
   };
 
-  // --- Render Functions for Manage Entities Tab ---
+  // --- Forgot Password / OTP Functions ---
 
+  const handleRequestOTP = async (e) => {
+    e.preventDefault();
+    setForgotPasswordMessage('');
+    setForgotPasswordError('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/request-password-reset-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setForgotPasswordMessage(data.message || 'OTP sent to your email.');
+        setCurrentView('resetPassword'); // Move to OTP entry/password reset view
+      } else {
+        setForgotPasswordError(data.message || 'Failed to send OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('Request OTP API error:', error);
+      setForgotPasswordError('Network error or server unavailable. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setForgotPasswordMessage('');
+    setForgotPasswordError('');
+    setIsLoading(true);
+
+    if (newPassword !== confirmNewPassword) {
+      setForgotPasswordError('New passwords do not match.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setForgotPasswordError('New password must be at least 6 characters long.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password-with-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: forgotPasswordEmail,
+          otp: otp,
+          newPassword: newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setForgotPasswordMessage(data.message || 'Password has been reset successfully. You can now log in with your new password.');
+        // Clear form fields
+        setForgotPasswordEmail('');
+        setOtp('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setCurrentView('login'); // Go back to login page
+      } else {
+        setForgotPasswordError(data.message || 'Failed to reset password. Please check your OTP or try again.');
+      }
+    } catch (error) {
+      console.error('Reset password API error:', error);
+      setForgotPasswordError('Network error or server unavailable. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Render Functions for Manage Entities Tab ---
   const renderCompanyManagement = () => (
     <div className="mb-8 p-6 bg-blue-50 rounded-lg shadow-inner">
       <div className="flex justify-between items-center mb-4">
@@ -808,7 +901,6 @@ const App = () => {
           {showAddCompanyForm ? 'Hide Add Company Form' : 'Add New Company'}
         </button>
       </div>
-
       {showAddCompanyForm && (
         <form onSubmit={editingCompany ? handleUpdateCompany : handleCreateCompany} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
           <h5 className="text-lg font-semibold text-gray-800">{editingCompany ? 'Edit Company Details' : 'Create New Company'}</h5>
@@ -847,57 +939,37 @@ const App = () => {
           </div>
           {/* NEW: Notification Emails Input */}
           <div>
-            <label htmlFor="companyNotificationEmails" className="block text-sm font-medium text-gray-700">
-              Notification Emails (comma-separated):
-            </label>
-            <textarea
+            <label htmlFor="companyNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails (comma-separated):</label>
+            <input
+              type="text"
               id="companyNotificationEmails"
-              rows="3"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               value={newCompanyNotificationEmails}
               onChange={(e) => setNewCompanyNotificationEmails(e.target.value)}
-              placeholder="e.g., email1@example.com, email2@example.com"
-            ></textarea>
+              placeholder="email1@example.com, email2@example.com"
+            />
           </div>
-          <div className="flex space-x-2">
-            <button
-              type="submit"
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Processing...' : (editingCompany ? 'Update Company' : 'Create Company')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingCompany(null);
-                setNewCompanyName('');
-                setNewCompanyAdminEmail('');
-                setNewCompanyAdminPassword('');
-                setNewCompanyNotificationEmails(''); // Clear field
-                setShowAddCompanyForm(false); // Hide form on cancel
-              }}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processing...' : (editingCompany ? 'Update Company' : 'Create Company')}
+          </button>
         </form>
       )}
-
-      <h4 className="text-xl font-semibold text-blue-800 mt-8 mb-4">Existing Companies</h4>
-      {companies.length === 0 && !isLoading && <p className="text-gray-600">No companies found.</p>}
+      {companies.length === 0 && !isLoading && !error && (
+        <p className="text-gray-600 text-center py-4">No companies found. Add a new company to get started.</p>
+      )}
       {companies.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -905,36 +977,10 @@ const App = () => {
                 <tr key={company._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{company.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.companyAdmin?.email || 'N/A'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(company.notificationEmails)}</td> {/* NEW */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatEmailsArray(company.notificationEmails)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleEditCompany(company)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCompany(company._id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button
-                      onClick={() => {
-                        setSelectedCompanyForBranch(company._id);
-                        fetchBranchesByCompany(company._id);
-                        setBranches([]); // Clear previous branches when selecting new company
-                        setAllClients([]); // Clear allClients too
-                        setSelectedBranchForClient(''); // Clear selected branch for client
-                        setShowAddBranchForm(false); // Hide add branch form
-                        setShowAddClientForm(false); // Hide add client form
-                      }}
-                      className="text-green-600 hover:text-green-900"
-                    >
-                      View Branches ({company.name})
-                    </button>
+                    <button onClick={() => handleEditCompany(company)} className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button>
+                    <button onClick={() => handleDeleteCompany(company._id)} className="text-red-600 hover:text-red-900">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -952,14 +998,13 @@ const App = () => {
         <button
           onClick={() => {
             setShowAddBranchForm(!showAddBranchForm);
-            // Clear form fields when toggling to add mode
             if (!showAddBranchForm) {
               setEditingBranch(null);
               setNewBranchName('');
               setNewBranchAdminEmail('');
               setNewBranchAdminPassword('');
               setNewBranchNotificationEmails(''); // Clear field
-              setSelectedCompanyForBranch(''); // Clear selected company for branch
+              setSelectedCompanyForBranch(''); // Clear selected company
             }
           }}
           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
@@ -967,7 +1012,6 @@ const App = () => {
           {showAddBranchForm ? 'Hide Add Branch Form' : 'Add New Branch'}
         </button>
       </div>
-
       {showAddBranchForm && (
         <form onSubmit={editingBranch ? handleUpdateBranch : handleCreateBranch} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
           <h5 className="text-lg font-semibold text-gray-800">{editingBranch ? 'Edit Branch Details' : 'Create New Branch'}</h5>
@@ -979,16 +1023,12 @@ const App = () => {
               value={selectedCompanyForBranch}
               onChange={(e) => {
                 setSelectedCompanyForBranch(e.target.value);
-                // Clear branches and allClients when company selection changes
+                // When company changes, clear branches and clients
                 setBranches([]);
                 setAllClients([]);
-                setSelectedBranchForClient(''); // Clear selected branch for client
-                if (e.target.value) {
-                  fetchBranchesByCompany(e.target.value);
-                }
               }}
               required
-              disabled={!!editingBranch} // Disable if editing a branch
+              disabled={!!editingBranch} // Disable company selection when editing a branch
             >
               <option value="">-- Select a Company --</option>
               {companies.map(company => (
@@ -996,97 +1036,81 @@ const App = () => {
               ))}
             </select>
           </div>
-          {selectedCompanyForBranch && (
-            <>
-              <div>
-                <label htmlFor="branchName" className="block text-sm font-medium text-gray-700">Branch Name:</label>
-                <input
-                  type="text"
-                  id="branchName"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newBranchName}
-                  onChange={(e) => setNewBranchName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="branchAdminEmail" className="block text-sm font-medium text-gray-700">Admin Email:</label>
-                <input
-                  type="email"
-                  id="branchAdminEmail"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newBranchAdminEmail}
-                  onChange={(e) => setNewBranchAdminEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="branchAdminPassword" className="block text-sm font-medium text-gray-700">Admin Password: {editingBranch ? '(Leave blank to keep current)' : ''}</label>
-                <input
-                  type="password"
-                  id="branchAdminPassword"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newBranchAdminPassword}
-                  onChange={(e) => setNewBranchAdminPassword(e.target.value)}
-                  required={!editingBranch}
-                />
-              </div>
-              {/* NEW: Notification Emails Input */}
-              <div>
-                <label htmlFor="branchNotificationEmails" className="block text-sm font-medium text-gray-700">
-                  Notification Emails (comma-separated):
-                </label>
-                <textarea
-                  id="branchNotificationEmails"
-                  rows="3"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newBranchNotificationEmails}
-                  onChange={(e) => setNewBranchNotificationEmails(e.target.value)}
-                  placeholder="e.g., email1@example.com, email2@example.com"
-                ></textarea>
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Processing...' : (editingBranch ? 'Update Branch' : 'Create Branch')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingBranch(null);
-                    setNewBranchName('');
-                    setNewBranchAdminEmail('');
-                    setNewBranchAdminPassword('');
-                    setNewBranchNotificationEmails(''); // Clear field
-                    setShowAddBranchForm(false); // Hide form on cancel
-                  }}
-                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+          <div>
+            <label htmlFor="branchName" className="block text-sm font-medium text-gray-700">Branch Name:</label>
+            <input
+              type="text"
+              id="branchName"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="branchAdminEmail" className="block text-sm font-medium text-gray-700">Admin Email:</label>
+            <input
+              type="email"
+              id="branchAdminEmail"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newBranchAdminEmail}
+              onChange={(e) => setNewBranchAdminEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="branchAdminPassword" className="block text-sm font-medium text-gray-700">Admin Password: {editingBranch ? '(Leave blank to keep current)' : ''}</label>
+            <input
+              type="password"
+              id="branchAdminPassword"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newBranchAdminPassword}
+              onChange={(e) => setNewBranchAdminPassword(e.target.value)}
+              required={!editingBranch}
+            />
+          </div>
+          {/* NEW: Notification Emails Input */}
+          <div>
+            <label htmlFor="branchNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails (comma-separated):</label>
+            <input
+              type="text"
+              id="branchNotificationEmails"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newBranchNotificationEmails}
+              onChange={(e) => setNewBranchNotificationEmails(e.target.value)}
+              placeholder="email1@example.com, email2@example.com"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processing...' : (editingBranch ? 'Update Branch' : 'Create Branch')}
+          </button>
         </form>
       )}
-
-      <h4 className="text-xl font-semibold text-green-800 mt-8 mb-4">Branches for Selected Company</h4>
-      {!selectedCompanyForBranch && <p className="text-gray-600">Please select a company to view its branches.</p>}
-      {selectedCompanyForBranch && branches.length === 0 && !isLoading && <p className="text-gray-600">No branches found for this company.</p>}
-      {selectedCompanyForBranch && branches.length > 0 && (
+      {selectedCompanyForBranch && (
+        <button
+          onClick={() => fetchBranchesByCompany(selectedCompanyForBranch)}
+          className="mb-4 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
+          disabled={isLoading}
+        >
+          Load Branches for Selected Company
+        </button>
+      )}
+      {branches.length === 0 && !isLoading && !error && selectedCompanyForBranch && (
+        <p className="text-gray-600 text-center py-4">No branches found for this company. Add a new branch.</p>
+      )}
+      {branches.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clients</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1094,33 +1118,10 @@ const App = () => {
                 <tr key={branch._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{branch.branchAdmin?.email || 'N/A'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(branch.notificationEmails)}</td> {/* NEW */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatEmailsArray(branch.notificationEmails)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleEditBranch(branch)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteBranch(branch._id, branch.company._id || branch.company)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button
-                      onClick={() => {
-                        setSelectedBranchForClient(branch._id);
-                        setSelectedCompanyForClient(branch.company._id || branch.company);
-                        fetchClientsByBranchOrCompany(branch._id, 'branch');
-                        setShowAddClientForm(false); // Hide add client form
-                      }}
-                      className="text-purple-600 hover:text-purple-900"
-                    >
-                      View Clients ({branch.name})
-                    </button>
+                    <button onClick={() => handleEditBranch(branch)} className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button>
+                    <button onClick={() => handleDeleteBranch(branch._id, branch.company._id || branch.company)} className="text-red-600 hover:text-red-900">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -1138,7 +1139,6 @@ const App = () => {
         <button
           onClick={() => {
             setShowAddClientForm(!showAddClientForm);
-            // Clear form fields when toggling to add mode
             if (!showAddClientForm) {
               setEditingClient(null);
               setNewClientEmail('');
@@ -1155,28 +1155,20 @@ const App = () => {
           {showAddClientForm ? 'Hide Add Client Form' : 'Add New Client'}
         </button>
       </div>
-
       {showAddClientForm && (
         <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
           <h5 className="text-lg font-semibold text-gray-800">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
           <div>
-            <label htmlFor="selectCompanyForClient" className="block text-sm font-medium text-gray-700">Select Company:</label>
+            <label htmlFor="selectCompanyForClient" className="block text-sm font-medium text-gray-700">Select Company (Optional):</label>
             <select
               id="selectCompanyForClient"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               value={selectedCompanyForClient}
               onChange={(e) => {
                 setSelectedCompanyForClient(e.target.value);
-                setSelectedBranchForClient(''); // Clear branch selection when company changes
-                setAllClients([]); // Clear clients
-                if (e.target.value) {
-                  fetchBranchesByCompany(e.target.value); // Fetch branches for new company
-                } else {
-                  setBranches([]); // Clear branches if no company selected
-                }
+                setSelectedBranchForClient(''); // Clear branch when company changes
+                setBranches([]); // Clear branches list
               }}
-              required
-              disabled={!!editingClient} // Disable if editing a client
             >
               <option value="">-- Select a Company --</option>
               {companies.map(company => (
@@ -1192,126 +1184,139 @@ const App = () => {
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 value={selectedBranchForClient}
                 onChange={(e) => setSelectedBranchForClient(e.target.value)}
-                disabled={!!editingClient || branches.length === 0} // Disable if editing or no branches
               >
                 <option value="">-- Select a Branch --</option>
-                {branches.map(branch => (
+                {branches.filter(branch => (branch.company._id || branch.company) === selectedCompanyForClient).map(branch => (
                   <option key={branch._id} value={branch._id}>{branch.name}</option>
                 ))}
               </select>
-              {branches.length === 0 && selectedCompanyForClient && (
-                <p className="text-sm text-gray-500 mt-1">No branches available for this company. Client will be assigned directly to the company.</p>
-              )}
+              <button
+                type="button"
+                onClick={() => fetchBranchesByCompany(selectedCompanyForClient)}
+                className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600"
+                disabled={isLoading}
+              >
+                Load Branches
+              </button>
             </div>
           )}
-
-          {(selectedCompanyForClient || selectedBranchForClient) && (
-            <>
-              <div>
-                <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">Client Email:</label>
-                <input
-                  type="email"
-                  id="clientEmail"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newClientEmail}
-                  onChange={(e) => setNewClientEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="clientPassword" className="block text-sm font-medium text-gray-700">Client Password: {editingClient ? '(Leave blank to keep current)' : ''}</label>
-                <input
-                  type="password"
-                  id="clientPassword"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newClientPassword}
-                  onChange={(e) => setNewClientPassword(e.target.value)}
-                  required={!editingClient}
-                />
-              </div>
-              <div>
-                <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">Customer Name (for Client):</label>
-                <input
-                  type="text"
-                  id="customerName"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="customerMobile" className="block text-sm font-medium text-gray-700">Customer Mobile (for Client):</label>
-                <input
-                  type="text"
-                  id="customerMobile"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newCustomerMobile}
-                  onChange={(e) => setNewCustomerMobile(e.target.value)}
-                  required
-                />
-              </div>
-              {/* NEW: Notification Emails Input */}
-              <div>
-                <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">
-                  Notification Emails (comma-separated):
-                </label>
-                <textarea
-                  id="clientNotificationEmails"
-                  rows="3"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={newClientNotificationEmails}
-                  onChange={(e) => setNewClientNotificationEmails(e.target.value)}
-                  placeholder="e.g., email1@example.com, email2@example.com"
-                ></textarea>
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Create Client')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingClient(null);
-                    setNewClientEmail('');
-                    setNewClientPassword('');
-                    setNewCustomerName('');
-                    setNewCustomerMobile('');
-                    setNewClientNotificationEmails(''); // Clear field
-                    setSelectedCompanyForClient('');
-                    setSelectedBranchForClient('');
-                    setShowAddClientForm(false); // Hide form on cancel
-                  }}
-                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+          <div>
+            <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">Client Email:</label>
+            <input
+              type="email"
+              id="clientEmail"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newClientEmail}
+              onChange={(e) => setNewClientEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="clientPassword" className="block text-sm font-medium text-gray-700">Client Password: {editingClient ? '(Leave blank to keep current)' : ''}</label>
+            <input
+              type="password"
+              id="clientPassword"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newClientPassword}
+              onChange={(e) => setNewClientPassword(e.target.value)}
+              required={!editingClient}
+            />
+          </div>
+          <div>
+            <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">Customer Name:</label>
+            <input
+              type="text"
+              id="customerName"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCustomerName}
+              onChange={(e) => setNewCustomerName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="customerMobile" className="block text-sm font-medium text-gray-700">Customer Mobile:</label>
+            <input
+              type="text"
+              id="customerMobile"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newCustomerMobile}
+              onChange={(e) => setNewCustomerMobile(e.target.value)}
+              required
+            />
+          </div>
+          {/* NEW: Notification Emails Input */}
+          <div>
+            <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails (comma-separated):</label>
+            <input
+              type="text"
+              id="clientNotificationEmails"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={newClientNotificationEmails}
+              onChange={(e) => setNewClientNotificationEmails(e.target.value)}
+              placeholder="email1@example.com, email2@example.com"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Create Client')}
+          </button>
         </form>
       )}
+      <div className="flex space-x-4 mb-4">
+        <select
+          value={filterCompanyId}
+          onChange={(e) => {
+            setFilterCompanyId(e.target.value);
+            setFilterBranchId(''); // Reset branch filter when company changes
+            fetchClientsByBranchOrCompany(e.target.value, 'company');
+          }}
+          className="mt-1 block w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+        >
+          <option value="">Filter by Company</option>
+          {companies.map(company => (
+            <option key={company._id} value={company._id}>{company.name}</option>
+          ))}
+        </select>
+        <select
+          value={filterBranchId}
+          onChange={(e) => {
+            setFilterBranchId(e.target.value);
+            fetchClientsByBranchOrCompany(e.target.value, 'branch');
+          }}
+          className="mt-1 block w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          disabled={!filterCompanyId}
+        >
+          <option value="">Filter by Branch</option>
+          {branches.filter(branch => (branch.company._id || branch.company) === filterCompanyId).map(branch => (
+            <option key={branch._id} value={branch._id}>{branch.name}</option>
+          ))}
+        </select>
+        <button
+          onClick={fetchAllClientsForManagement}
+          className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors duration-200"
+        >
+          Show All Clients
+        </button>
+      </div>
 
-      <h4 className="text-xl font-semibold text-purple-800 mt-8 mb-4">Clients for Selected {selectedBranchForClient ? 'Branch' : (selectedCompanyForClient ? 'Company' : '')}</h4>
-      {!selectedCompanyForClient && !selectedBranchForClient && <p className="text-gray-600">Please select a company or branch to view its clients.</p>}
-      {(selectedCompanyForClient || selectedBranchForClient) && allClients.length === 0 && !isLoading && <p className="text-gray-600">No clients found for this {selectedBranchForClient ? 'branch' : 'company'}.</p>}
-      {(selectedCompanyForClient || selectedBranchForClient) && allClients.length > 0 && (
+      {allClients.length === 0 && !isLoading && !error && (
+        <p className="text-gray-600 text-center py-4">No clients found. Add a new client or adjust filters.</p>
+      )}
+      {allClients.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th> {/* NEW */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1322,20 +1327,10 @@ const App = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.company?.name || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.branch?.name || 'N/A'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(client.notificationEmails)}</td> {/* NEW */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatEmailsArray(client.notificationEmails)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleEditClient(client)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClient(client._id, selectedBranchForClient ? 'branch' : 'company', selectedBranchForClient || selectedCompanyForClient)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                    <button onClick={() => handleEditClient(client)} className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button>
+                    <button onClick={() => handleDeleteClient(client._id, client.branch ? 'branch' : (client.company ? 'company' : null), client.branch?._id || client.company?._id)} className="text-red-600 hover:text-red-900">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -1346,39 +1341,17 @@ const App = () => {
     </div>
   );
 
-
   const renderManageEntities = () => (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h3 className="text-2xl font-semibold text-gray-800 mb-4">Manage Companies, Branches & Clients</h3>
-
-      {isLoading && (
-        <div className="text-center text-indigo-600 font-semibold mb-4">Loading...</div>
-      )}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <strong className="font-bold">Error!</strong>
-          <span className="block sm:inline"> {error}</span>
-        </div>
-      )}
-      {successMessage && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <strong className="font-bold">Success!</strong>
-          <span className="block sm:inline"> {successMessage}</span>
-        </div>
-      )}
-
+    <div>
       {renderCompanyManagement()}
       {renderBranchManagement()}
       {renderClientManagement()}
     </div>
   );
 
-  // Render the Reviews Viewing content
   const renderViewReviews = () => (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h3 className="text-2xl font-semibold text-gray-800 mb-4">View All Reviews</h3>
-
-      {/* Filters */}
+    <div className="p-6 bg-yellow-50 rounded-lg shadow-inner">
+      <h4 className="text-xl font-semibold text-yellow-800 mb-4">All Reviews</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div>
           <label htmlFor="filterCompany" className="block text-sm font-medium text-gray-700">Filter by Company:</label>
@@ -1388,8 +1361,8 @@ const App = () => {
             value={filterCompanyId}
             onChange={(e) => {
               setFilterCompanyId(e.target.value);
-              setFilterBranchId(''); // Reset branch filter when company changes
-              setFilterClientId(''); // Reset client filter when company changes
+              setFilterBranchId(''); // Reset branch filter
+              setFilterClientId(''); // Reset client filter
               fetchClientsAndBranchesForReviewFilters(e.target.value, ''); // Fetch branches and clients for new company
             }}
           >
@@ -1407,10 +1380,10 @@ const App = () => {
             value={filterBranchId}
             onChange={(e) => {
               setFilterBranchId(e.target.value);
-              setFilterClientId(''); // Reset client filter when branch changes
+              setFilterClientId(''); // Reset client filter
               fetchClientsAndBranchesForReviewFilters(filterCompanyId, e.target.value); // Fetch clients for new branch
             }}
-            disabled={!filterCompanyId || branches.length === 0} // Disable if no company selected or no branches
+            disabled={!filterCompanyId}
           >
             <option value="">All Branches</option>
             {branches.map(branch => (
@@ -1418,7 +1391,6 @@ const App = () => {
             ))}
           </select>
         </div>
-        {/* Filter by Client - Now uses filteredClients */}
         <div>
           <label htmlFor="filterClient" className="block text-sm font-medium text-gray-700">Filter by Client:</label>
           <select
@@ -1426,7 +1398,7 @@ const App = () => {
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={filterClientId}
             onChange={(e) => setFilterClientId(e.target.value)}
-            disabled={filteredClients.length === 0 && (filterCompanyId || filterBranchId)} // Disable if no clients for selected company/branch
+            disabled={!filterCompanyId && !filterBranchId} // Disable if no company or branch selected
           >
             <option value="">All Clients</option>
             {filteredClients.map(client => (
@@ -1454,65 +1426,64 @@ const App = () => {
             onChange={(e) => setFilterEndDate(e.target.value)}
           />
         </div>
+        <div className="col-span-full flex justify-end">
+          <button
+            onClick={fetchAllReviews}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading...' : 'Apply Filters'}
+          </button>
+        </div>
       </div>
 
-      <button
-        onClick={fetchAllReviews}
-        className="mb-6 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        disabled={isLoading}
-      >
-        {isLoading ? 'Loading Reviews...' : 'Apply Filters'}
-      </button>
-
-      {isLoading && (
-        <div className="text-center text-indigo-600 font-semibold mb-4">Loading Reviews...</div>
+      {reviews.length === 0 && !isLoading && !error && (
+        <p className="text-gray-600 text-center py-4">No reviews found matching the criteria.</p>
       )}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-          <strong className="font-bold">Error!</strong>
-          <span className="block sm:inline"> {error}</span>
-        </div>
-      )}
-
-      <h4 className="text-xl font-semibold text-gray-800 mb-4">All Reviews ({reviews.length})</h4>
-      {reviews.length === 0 && !isLoading && !error && <p className="text-gray-600">No reviews found matching your criteria.</p>}
       {reviews.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transcribed Text</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voice Audio</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Review Text</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voice Audio</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Data</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {reviews.map((review) => (
                 <tr key={review._id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{review.rating}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {review.customerName} ({review.customerMobile})<br/>
-                    <span className="text-xs text-gray-400">Client: {review.client?.email || 'N/A'}</span>
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{review.rating}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.customerName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.customerMobile}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.client?.email || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.company?.name || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{review.branch?.name || 'N/A'}</td>
-                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">{review.transcribedText || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{review.transcribedText || review.textReview || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {review.voiceData ? (
-                      <a href={review.voiceData} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-900">Listen</a>
+                      <audio controls src={review.voiceData} className="w-32" />
                     ) : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500">
                     {review.invoiceData ? (
-                      <div className="text-xs">
-                        {review.invoiceData.jobCardNumber && `Job Card: ${review.invoiceData.jobCardNumber}`}<br/>
-                        {review.invoiceData.invoiceNumber && `Invoice No: ${review.invoiceData.invoiceNumber}`}<br/>
-                        {review.invoiceData.invoiceDate && `Date: ${review.invoiceData.invoiceDate}`}
+                      <div>
+                        {review.invoiceData.jobCardNumber && `Job Card: ${review.invoiceData.jobCardNumber}`}<br />
+                        {review.invoiceData.invoiceNumber && `Invoice No: ${review.invoiceData.invoiceNumber}`}<br />
+                        {review.invoiceData.invoiceDate && `Invoice Date: ${review.invoiceData.invoiceDate}`}<br />
+                        {review.invoiceData.vin && `VIN: ${review.invoiceData.vin}`}<br />
+                        {review.invoiceData.customerNameFromInvoice && `Cust Name (Inv): ${review.invoiceData.customerNameFromInvoice}`}<br />
+                        {review.invoiceData.customerMobileFromInvoice && `Cust Mobile (Inv): ${review.invoiceData.customerMobileFromInvoice}`}<br />
+                        {review.invoiceFileUrl && (
+                          <a href={review.invoiceFileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View File</a>
+                        )}
                       </div>
                     ) : 'N/A'}
                   </td>
@@ -1525,102 +1496,6 @@ const App = () => {
           </table>
         </div>
       )}
-    </div>
-  );
-
-  // Render the login view
-  const renderLogin = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-700 p-4"> {/* Enhanced background */}
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-3xl font-bold text-center text-indigo-800 mb-6">Superuser Login</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email:</label>
-            <input
-              type="email"
-              id="email"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password:</label>
-            <input
-              type="password"
-              id="password"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          {loginError && (
-            <p className="text-red-600 text-sm text-center">{loginError}</p>
-          )}
-          <button
-            type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-300 ease-in-out"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Logging In...' : 'Login'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-
-  // Render the dashboard view
-  const renderDashboard = () => (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-indigo-700 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Superuser Dashboard</h1>
-        <div className="flex items-center space-x-4">
-          <span className="text-lg">Welcome, {userData?.email} (Superuser)</span>
-          <button
-            onClick={handleLogout}
-            className="bg-indigo-800 hover:bg-indigo-900 text-white px-4 py-2 rounded-md transition duration-300 ease-in-out"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {/* Navigation Tabs */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-start h-16">
-            <button
-              onClick={() => setActiveTab('manage')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'manage'
-                  ? 'border-b-4 border-indigo-600 text-indigo-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              Manage Entities
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'reviews'
-                  ? 'border-b-4 border-indigo-600 text-indigo-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              View Reviews
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content Area - Adjusted to take full width */}
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-6"> {/* Removed max-w-7xl, added responsive padding */}
-        {activeTab === 'manage' && renderManageEntities()}
-        {activeTab === 'reviews' && renderViewReviews()}
-      </main>
     </div>
   );
 
@@ -1638,7 +1513,265 @@ const App = () => {
         `}
       </style>
 
-      {currentView === 'login' ? renderLogin() : renderDashboard()}
+      {(() => {
+        switch (currentView) {
+          case 'login':
+            return (
+              <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
+                <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
+                  <h2 className="text-4xl font-extrabold text-center text-gray-900 mb-8 tracking-wide">Superuser Login</h2>
+                  <form onSubmit={handleLogin} className="space-y-6">
+                    <div>
+                      <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-2">Email</label>
+                      <input
+                        type="email"
+                        id="email"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="password" className="block text-base font-medium text-gray-700 mb-2">Password</label>
+                      <input
+                        type="password"
+                        id="password"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {loginError && (
+                      <p className="text-red-600 text-sm font-medium text-center -mt-2">{loginError}</p>
+                    )}
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Logging In...' : 'Login'}
+                    </button>
+                    <div className="text-center mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView('forgotPassword');
+                          setLoginError(''); // Clear login error
+                          setForgotPasswordMessage(''); // Clear any previous messages
+                          setForgotPasswordError(''); // Clear any previous errors
+                          setForgotPasswordEmail(''); // Clear email field
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+
+          case 'forgotPassword':
+            return (
+              <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
+                <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
+                  <h2 className="text-4xl font-extrabold text-center text-gray-900 mb-8 tracking-wide">Forgot Password</h2>
+                  <form onSubmit={handleRequestOTP} className="space-y-6">
+                    <div>
+                      <label htmlFor="forgotPasswordEmail" className="block text-base font-medium text-gray-700 mb-2">Enter your email</label>
+                      <input
+                        type="email"
+                        id="forgotPasswordEmail"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={forgotPasswordEmail}
+                        onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {forgotPasswordError && (
+                      <p className="text-red-600 text-sm font-medium text-center -mt-2">{forgotPasswordError}</p>
+                    )}
+                    {forgotPasswordMessage && (
+                      <p className="text-green-600 text-sm font-medium text-center -mt-2">{forgotPasswordMessage}</p>
+                    )}
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Sending OTP...' : 'Send OTP'}
+                    </button>
+                    <div className="text-center mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView('login');
+                          setForgotPasswordMessage('');
+                          setForgotPasswordError('');
+                          setForgotPasswordEmail('');
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Back to Login
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+
+          case 'resetPassword':
+            return (
+              <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
+                <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
+                  <h2 className="text-4xl font-extrabold text-center text-gray-900 mb-8 tracking-wide">Reset Password</h2>
+                  <form onSubmit={handleResetPassword} className="space-y-6">
+                    <div>
+                      <label htmlFor="resetEmail" className="block text-base font-medium text-gray-700 mb-2">Email</label>
+                      <input
+                        type="email"
+                        id="resetEmail"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-100 focus:outline-none text-lg"
+                        value={forgotPasswordEmail}
+                        readOnly // Email should not be editable here
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="otp" className="block text-base font-medium text-gray-700 mb-2">OTP</label>
+                      <input
+                        type="text"
+                        id="otp"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="newPassword" className="block text-base font-medium text-gray-700 mb-2">New Password</label>
+                      <input
+                        type="password"
+                        id="newPassword"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="confirmNewPassword" className="block text-base font-medium text-gray-700 mb-2">Confirm New Password</label>
+                      <input
+                        type="password"
+                        id="confirmNewPassword"
+                        className="mt-1 block w-full px-5 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {forgotPasswordError && (
+                      <p className="text-red-600 text-sm font-medium text-center -mt-2">{forgotPasswordError}</p>
+                    )}
+                    {forgotPasswordMessage && (
+                      <p className="text-green-600 text-sm font-medium text-center -mt-2">{forgotPasswordMessage}</p>
+                    )}
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Resetting Password...' : 'Reset Password'}
+                    </button>
+                    <div className="text-center mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView('login');
+                          setForgotPasswordMessage('');
+                          setForgotPasswordError('');
+                          setForgotPasswordEmail('');
+                          setOtp('');
+                          setNewPassword('');
+                          setConfirmNewPassword('');
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Back to Login
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+
+          case 'dashboard':
+            return (
+              <div className="min-h-screen bg-gray-100">
+                <nav className="bg-white shadow-lg">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between h-16">
+                      <div className="flex items-center">
+                        <h1 className="text-2xl font-bold text-gray-900">Superuser Dashboard</h1>
+                      </div>
+                      <div className="flex items-center">
+                        <button
+                          onClick={handleLogout}
+                          className="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                    <div className="border-t border-gray-200">
+                      <div className="flex space-x-4">
+                        <button
+                          onClick={() => setActiveTab('manage')}
+                          className={`px-6 py-3 text-lg font-medium ${
+                            activeTab === 'manage'
+                              ? 'border-b-4 border-indigo-600 text-indigo-700'
+                              : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                          } focus:outline-none transition-colors duration-200`}
+                        >
+                          Manage Entities
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('reviews')}
+                          className={`px-6 py-3 text-lg font-medium ${
+                            activeTab === 'reviews'
+                              ? 'border-b-4 border-indigo-600 text-indigo-700'
+                              : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                          } focus:outline-none transition-colors duration-200`}
+                        >
+                          View Reviews
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </nav>
+
+                {/* Main Content Area - Adjusted to take full width */}
+                <main className="w-full px-4 sm:px-6 lg:px-8 py-6"> {/* Removed max-w-7xl, added responsive padding */}
+                  {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                    <strong className="font-bold">Error!</strong>
+                    <span className="block sm:inline"> {error}</span>
+                  </div>}
+                  {successMessage && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+                    <strong className="font-bold">Success!</strong>
+                    <span className="block sm:inline"> {successMessage}</span>
+                  </div>}
+
+                  {activeTab === 'manage' && renderManageEntities()}
+                  {activeTab === 'reviews' && renderViewReviews()}
+                </main>
+              </div>
+            );
+
+          default:
+            return null;
+        }
+      })()}
     </div>
   );
 };

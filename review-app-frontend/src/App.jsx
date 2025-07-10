@@ -642,7 +642,7 @@ const App = () => {
     if (rating === 5) return '😕';
     if (rating === 6) return '🙂';
     if (rating === 7) return '😊';
-    if (rating === 8) return '�';
+    if (rating === 8) return '😊';
     if (rating === 9) return '🤩';
     if (rating === 10) return '✨';
     return '';
@@ -753,10 +753,7 @@ const App = () => {
 
     return (
       <>
-        {/* Tailwind CSS CDN - Always include this for Tailwind to work */}
-        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-        {/* Google Fonts - Inter */}
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        
 
         {/* Custom CSS for animations (Tailwind doesn't have these by default) */}
         <style>

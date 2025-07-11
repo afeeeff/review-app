@@ -29,7 +29,7 @@ const allowedOrigins = [
       'http://localhost:5176',
        // Your local Vite development server (if using Vite default)
       'https://branch-frontend.onrender.com',
-      'https://superuser-frontend.onrender.com/',
+      'https://superuser-frontend.onrender.com',
       'https://company-frontend-tdh3.onrender.com',
       'https://review-app-frontend.onrender.com'
 

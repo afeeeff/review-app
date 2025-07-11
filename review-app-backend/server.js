@@ -21,7 +21,39 @@ const branchRoutes = require('./routes/branchRoutes'); // NEW: Import branch rou
 // --- Middleware ---
 // Enable CORS for all origins. In a production app, you might restrict this to your frontend URL.
 // For development, allowing all origins is fine.
-app.use(cors());
+const allowedOrigins = [
+      
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:5176',
+       // Your local Vite development server (if using Vite default)
+      'https://branch-frontend.onrender.com',
+      'https://superuser-frontend.onrender.com/',
+      'https://company-frontend-tdh3.onrender.com',
+      'https://review-app-frontend.onrender.com'
+
+       // <--- REPLACE THIS WITH YOUR ACTUAL DEPLOYED FRONTEND URL
+      // Add any other specific frontend origins if you have them (e.g., a staging frontend)
+    ];
+app.use(cors({
+      origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        // Or if the origin is in our allowed list
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          // Deny access if the origin is not allowed
+          const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+          console.error(msg); // Log the blocked origin for debugging
+          callback(new Error(msg), false);
+        }
+      },
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Specify allowed HTTP methods
+      credentials: true, // Allow sending cookies and authorization headers (important for JWT)
+      optionsSuccessStatus: 204, // Respond with 204 for preflight OPTIONS requests
+    }));
+
 // Parse JSON request bodies
 app.use(express.json());
 

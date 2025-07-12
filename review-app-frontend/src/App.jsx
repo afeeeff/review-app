@@ -59,7 +59,7 @@ const App = () => {
   const API_BASE_URL =
   window.location.hostname === 'localhost'
     ? 'http://localhost:5000/api'
-    : 'https://review-app-backend-ekjk.onrender.com'; // Make sure this matches your backend port
+    : 'https://review-app-backend-ekjk.onrender.com/api'; // Make sure this matches your backend port
 
   // Effect to check for token and user data on component mount and set initial view
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const ViewReviews = ({
   userData,
@@ -23,22 +23,13 @@ const ViewReviews = ({
   const [clientsForReviewFilter, setClientsForReviewFilter] = useState([]);
 
   // Helper to get auth headers
-  const getAuthHeaders = () => ({
+  const getAuthHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${userData?.token}`,
-  });
-
-  // Effect to fetch initial reviews when the tab is active
-  useEffect(() => {
-    if (userData?.token) {
-      fetchAllReviews();
-      // Also fetch initial branches and clients for filters if a company is pre-selected
-      fetchClientsAndBranchesForReviewFilters(filterCompanyId, filterBranchId);
-    }
-  }, [userData?.token]); // Fetch when user data is available
+  }), [userData?.token]);
 
   // Function to fetch clients and branches specifically for the review filters
-  const fetchClientsAndBranchesForReviewFilters = async (companyId, branchId) => {
+  const fetchClientsAndBranchesForReviewFilters = useCallback(async (companyId, branchId) => {
     setError('');
     // No need to set global isLoading here, as this is for filter dropdowns
 
@@ -51,9 +42,11 @@ const ViewReviews = ({
         const branchData = await branchResponse.json();
         if (branchResponse.ok) {
           setBranchesForReviewFilter(branchData);
+          console.log("ViewReviews: Branches fetched for review filter (company", companyId, "):", branchData);
         } else {
           setError(branchData.message || 'Failed to fetch branches for filter.');
           setBranchesForReviewFilter([]);
+          console.error("ViewReviews: Failed to fetch branches for review filter (company", companyId, "):", branchData.message);
         }
       } else {
         setBranchesForReviewFilter([]); // Clear branches if no company selected
@@ -76,18 +69,20 @@ const ViewReviews = ({
       const clientData = await clientResponse.json();
       if (clientResponse.ok) {
         setClientsForReviewFilter(clientData);
+        console.log("ViewReviews: Clients fetched for review filter (company/branch", companyId, branchId, "):", clientData);
       } else {
         setError(clientData.message || 'Failed to fetch clients for filter.');
         setClientsForReviewFilter([]);
+        console.error("ViewReviews: Failed to fetch clients for review filter (company/branch", companyId, branchId, "):", clientData.message);
       }
     } catch (err) {
-      console.error('Error fetching clients/branches for review filters:', err);
+      console.error('ViewReviews: Error fetching clients/branches for review filters:', err);
       setError('Network error fetching filter data.');
     }
-  };
+  }, [API_BASE_URL, getAuthHeaders, setError]); // Added dependencies
 
   // --- Reviews API Calls ---
-  const fetchAllReviews = async () => {
+  const fetchAllReviews = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
@@ -113,18 +108,28 @@ const ViewReviews = ({
       const data = await response.json();
       if (response.ok) {
         setReviews(data);
+        console.log("ViewReviews: Reviews fetched:", data);
       } else {
         setError(data.message || 'Failed to fetch reviews.');
         setReviews([]);
+        console.error("ViewReviews: Failed to fetch reviews:", data.message);
       }
     } catch (err) {
-      console.error('Error fetching reviews:', err);
+      console.error('ViewReviews: Error fetching reviews:', err);
       setError('Network error fetching reviews.');
       setReviews([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [API_BASE_URL, filterCompanyId, filterBranchId, filterClientId, filterStartDate, filterEndDate, getAuthHeaders, setIsLoading, setError]); // Added dependencies
+
+  // Effect to trigger review fetching and filter dropdown data fetching
+  useEffect(() => {
+    if (userData?.token) {
+      fetchAllReviews();
+      fetchClientsAndBranchesForReviewFilters(filterCompanyId, filterBranchId);
+    }
+  }, [filterCompanyId, filterBranchId, filterClientId, filterStartDate, filterEndDate, userData?.token, fetchAllReviews, fetchClientsAndBranchesForReviewFilters]); // Added dependencies
 
   return (
     <div className="p-6 bg-yellow-50 rounded-lg shadow-inner">
@@ -140,7 +145,7 @@ const ViewReviews = ({
               setFilterCompanyId(e.target.value);
               setFilterBranchId(''); // Reset branch filter
               setFilterClientId(''); // Reset client filter
-              fetchClientsAndBranchesForReviewFilters(e.target.value, ''); // Fetch branches and clients for new company
+              // fetchClientsAndBranchesForReviewFilters will be called by useEffect
             }}
           >
             <option value="">All Companies</option>
@@ -158,7 +163,7 @@ const ViewReviews = ({
             onChange={(e) => {
               setFilterBranchId(e.target.value);
               setFilterClientId(''); // Reset client filter
-              fetchClientsAndBranchesForReviewFilters(filterCompanyId, e.target.value); // Fetch clients for new branch
+              // fetchClientsAndBranchesForReviewFilters will be called by useEffect
             }}
             disabled={!filterCompanyId}
           >
@@ -203,17 +208,10 @@ const ViewReviews = ({
             onChange={(e) => setFilterEndDate(e.target.value)}
           />
         </div>
-        <div className="col-span-full flex justify-end">
-          <button
-            onClick={fetchAllReviews}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Loading...' : 'Apply Filters'}
-          </button>
-        </div>
+        {/* Removed explicit "Apply Filters" button as useEffect handles it */}
       </div>
 
+      {isLoading && <p className="text-center text-indigo-600">Loading reviews...</p>}
       {reviews.length === 0 && !isLoading && !error && (
         <p className="text-gray-600 text-center py-4">No reviews found matching the criteria.</p>
       )}

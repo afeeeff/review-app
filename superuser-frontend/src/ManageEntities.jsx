@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const ManageEntities = ({
   userData,
@@ -25,7 +25,7 @@ const ManageEntities = ({
   const [newBranchAdminEmail, setNewBranchAdminEmail] = useState('');
   const [newBranchAdminPassword, setNewBranchAdminPassword] = useState('');
   const [newBranchNotificationEmails, setNewBranchNotificationEmails] = useState('');
-  const [selectedCompanyForBranch, setSelectedCompanyForBranch] = useState(''); // For creating/filtering new branch
+  const [selectedCompanyForBranchFilter, setSelectedCompanyForBranchFilter] = useState(''); // For filtering branches table
   const [editingBranch, setEditingBranch] = useState(null);
   const [showAddBranchForm, setShowAddBranchForm] = useState(false);
   const [managedBranches, setManagedBranches] = useState([]); // Branches displayed in the table
@@ -36,18 +36,19 @@ const ManageEntities = ({
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerMobile, setNewCustomerMobile] = useState('');
   const [newClientNotificationEmails, setNewClientNotificationEmails] = useState('');
-  const [selectedCompanyForClient, setSelectedCompanyForClient] = useState(''); // For creating/filtering new client
-  const [selectedBranchForClient, setSelectedBranchForClient] = useState(''); // For creating/filtering new client
+  const [selectedCompanyForClientFilter, setSelectedCompanyForClientFilter] = useState(''); // For filtering clients table
+  const [selectedBranchForClientFilter, setSelectedBranchForClientFilter] = useState(''); // For filtering clients table
   const [editingClient, setEditingClient] = useState(null);
   const [showAddClientForm, setShowAddClientForm] = useState(false);
   const [managedClients, setManagedClients] = useState([]); // Clients displayed in the table
-  const [branchesForClientFilter, setBranchesForClientFilter] = useState([]); // Branches for the client filter dropdown
+  const [branchesForClientDropdown, setBranchesForClientDropdown] = useState([]); // Branches for client add/edit form & filter dropdown
+
 
   // Helper to get auth headers
-  const getAuthHeaders = () => ({
+  const getAuthHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${userData?.token}`,
-  });
+  }), [userData?.token]);
 
   // Helper to parse comma-separated emails string into an array
   const parseEmailsString = (emailsString) => {
@@ -64,7 +65,7 @@ const ManageEntities = ({
   // --- API Calls for Companies, Branches, Clients ---
 
   // Fetches branches for the selected company in the branch management section
-  const fetchBranchesByCompany = async (companyId) => {
+  const fetchBranchesByCompany = useCallback(async (companyId) => {
     setIsLoading(true);
     setError('');
     setManagedBranches([]); // Clear previous branches
@@ -79,21 +80,23 @@ const ManageEntities = ({
       const data = await response.json();
       if (response.ok) {
         setManagedBranches(data); // Update managedBranches
+        console.log("ManageEntities: Branches fetched for company", companyId, ":", data);
       } else {
         setError(data.message || 'Failed to fetch branches.');
         setManagedBranches([]);
+        console.error("ManageEntities: Failed to fetch branches for company", companyId, ":", data.message);
       }
     } catch (err) {
-      console.error('Error fetching branches:', err);
+      console.error('ManageEntities: Error fetching branches:', err);
       setError('Network error fetching branches.');
       setManagedBranches([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [API_BASE_URL, getAuthHeaders, setIsLoading, setError]); // Added dependencies
 
   // Fetches clients based on selected company or branch in the client management section
-  const fetchClientsByBranchOrCompany = async (companyId, branchId) => {
+  const fetchClientsByBranchOrCompany = useCallback(async (companyId, branchId) => {
     setIsLoading(true);
     setError('');
     setManagedClients([]); // Clear previous clients
@@ -107,6 +110,9 @@ const ManageEntities = ({
       url = `${API_BASE_URL}/superuser/branches/${branchId}/clients`;
     } else if (companyId) {
       url = `${API_BASE_URL}/superuser/companies/${companyId}/clients`;
+    } else {
+      setIsLoading(false);
+      return; // Should not happen if at least one ID is provided
     }
 
     try {
@@ -116,26 +122,26 @@ const ManageEntities = ({
       const data = await response.json();
       if (response.ok) {
         setManagedClients(data); // Update managedClients
+        console.log("ManageEntities: Clients fetched for company/branch", companyId, branchId, ":", data);
       } else {
         setError(data.message || 'Failed to fetch clients.');
         setManagedClients([]);
+        console.error("ManageEntities: Failed to fetch clients for company/branch", companyId, branchId, ":", data.message);
       }
     } catch (err) {
-      console.error('Error fetching clients:', err);
+      console.error('ManageEntities: Error fetching clients:', err);
       setError('Network error fetching clients.');
       setManagedClients([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [API_BASE_URL, getAuthHeaders, setIsLoading, setError]); // Added dependencies
 
-  // Fetches branches specifically for the client filter dropdown
-  const fetchBranchesForClientFilter = async (companyId) => {
-    setIsLoading(true);
+  // Fetches branches specifically for the client form/filter dropdown
+  const fetchBranchesForClientDropdown = useCallback(async (companyId) => {
     setError('');
-    setBranchesForClientFilter([]); // Clear previous branches
+    setBranchesForClientDropdown([]); // Clear previous branches
     if (!companyId) {
-      setIsLoading(false);
       return;
     }
     try {
@@ -144,19 +150,38 @@ const ManageEntities = ({
       });
       const data = await response.json();
       if (response.ok) {
-        setBranchesForClientFilter(data);
+        setBranchesForClientDropdown(data);
+        console.log("ManageEntities: Branches fetched for client dropdown (company", companyId, "):", data);
       } else {
-        setError(data.message || 'Failed to fetch branches for client filter.');
-        setBranchesForClientFilter([]);
+        setError(data.message || 'Failed to fetch branches for client dropdown.');
+        setBranchesForClientDropdown([]);
+        console.error("ManageEntities: Failed to fetch branches for client dropdown (company", companyId, "):", data.message);
       }
     } catch (err) {
-      console.error('Error fetching branches for client filter:', err);
-      setError('Network error fetching branches for client filter.');
-      setBranchesForClientFilter([]);
-    } finally {
-      setIsLoading(false);
+      console.error('ManageEntities: Error fetching branches for client dropdown:', err);
+      setError('Network error fetching branches for client dropdown.');
+      setBranchesForClientDropdown([]);
     }
-  };
+  }, [API_BASE_URL, getAuthHeaders, setError]); // Added dependencies
+
+  // Effects to trigger data fetching based on filter changes
+  useEffect(() => {
+    if (selectedCompanyForBranchFilter) {
+      fetchBranchesByCompany(selectedCompanyForBranchFilter);
+    } else {
+      setManagedBranches([]); // Clear branches if no company is selected
+    }
+  }, [selectedCompanyForBranchFilter, fetchBranchesByCompany]);
+
+  useEffect(() => {
+    if (selectedCompanyForClientFilter || selectedBranchForClientFilter) {
+      fetchClientsByBranchOrCompany(selectedCompanyForClientFilter, selectedBranchForClientFilter);
+    } else {
+      setManagedClients([]); // Clear clients if no company or branch is selected
+    }
+    // Also update the client form's branch dropdown if company filter changes
+    fetchBranchesForClientDropdown(selectedCompanyForClientFilter);
+  }, [selectedCompanyForClientFilter, selectedBranchForClientFilter, fetchClientsByBranchOrCompany, fetchBranchesForClientDropdown]);
 
 
   // --- Company CRUD Operations ---
@@ -196,7 +221,7 @@ const ManageEntities = ({
         setError(data.message || 'Failed to create company.');
       }
     } catch (err) {
-      console.error('Error creating company:', err);
+      console.error('ManageEntities: Error creating company:', err);
       setError('Network error creating company.');
     } finally {
       setIsLoading(false);
@@ -249,7 +274,7 @@ const ManageEntities = ({
         setError(data.message || 'Failed to update company.');
       }
     } catch (err) {
-      console.error('Error updating company:', err);
+      console.error('ManageEntities: Error updating company:', err);
       setError('Network error updating company.');
     } finally {
       setIsLoading(false);
@@ -272,14 +297,17 @@ const ManageEntities = ({
       if (response.ok) {
         setSuccessMessage('Company deleted successfully!');
         fetchAllCompanies(); // Refresh list in App.jsx
+        setSelectedCompanyForBranchFilter(''); // Clear branch filter
         setManagedBranches([]); // Clear managed branches as they might be deleted
+        setSelectedCompanyForClientFilter(''); // Clear client company filter
+        setSelectedBranchForClientFilter(''); // Clear client branch filter
         setManagedClients([]); // Clear managed clients
-        setBranchesForClientFilter([]); // Clear branches for client filter
+        setBranchesForClientDropdown([]); // Clear branches for client dropdown
       } else {
         setError(data.message || 'Failed to delete company.');
       }
     } catch (err) {
-      console.error('Error deleting company:', err);
+      console.error('ManageEntities: Error deleting company:', err);
       setError('Network error deleting company.');
     } finally {
       setIsLoading(false);
@@ -293,14 +321,14 @@ const ManageEntities = ({
     setError('');
     setSuccessMessage('');
 
-    if (!selectedCompanyForBranch || !newBranchName || !newBranchAdminEmail || !newBranchAdminPassword) {
+    if (!selectedCompanyForBranchFilter || !newBranchName || !newBranchAdminEmail || !newBranchAdminPassword) {
       setError('All branch creation fields and a parent company are required.');
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/superuser/companies/${selectedCompanyForBranch}/branches`, {
+      const response = await fetch(`${API_BASE_URL}/superuser/companies/${selectedCompanyForBranchFilter}/branches`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -318,12 +346,12 @@ const ManageEntities = ({
         setNewBranchAdminPassword('');
         setNewBranchNotificationEmails('');
         setShowAddBranchForm(false);
-        fetchBranchesByCompany(selectedCompanyForBranch); // Refresh branches for the selected company
+        fetchBranchesByCompany(selectedCompanyForBranchFilter); // Refresh branches for the selected company
       } else {
         setError(data.message || 'Failed to create branch.');
       }
     } catch (err) {
-      console.error('Error creating branch:', err);
+      console.error('ManageEntities: Error creating branch:', err);
       setError('Network error creating branch.');
     } finally {
       setIsLoading(false);
@@ -336,7 +364,7 @@ const ManageEntities = ({
     setNewBranchAdminEmail(branch.branchAdmin?.email || '');
     setNewBranchAdminPassword('');
     setNewBranchNotificationEmails(formatEmailsArray(branch.notificationEmails));
-    setSelectedCompanyForBranch(branch.company._id || branch.company); // Pre-fill company ID
+    setSelectedCompanyForBranchFilter(branch.company._id || branch.company); // Pre-fill company ID
     setShowAddBranchForm(true);
   };
 
@@ -372,12 +400,12 @@ const ManageEntities = ({
         setNewBranchAdminPassword('');
         setNewBranchNotificationEmails('');
         setShowAddBranchForm(false);
-        fetchBranchesByCompany(selectedCompanyForBranch); // Refresh branches for the current company
+        fetchBranchesByCompany(selectedCompanyForBranchFilter); // Refresh branches for the current company
       } else {
         setError(data.message || 'Failed to update branch.');
       }
     } catch (err) {
-      console.error('Error updating branch:', err);
+      console.error('ManageEntities: Error updating branch:', err);
       setError('Network error updating branch.');
     } finally {
       setIsLoading(false);
@@ -400,13 +428,15 @@ const ManageEntities = ({
       if (response.ok) {
         setSuccessMessage('Branch deleted successfully!');
         fetchBranchesByCompany(companyId); // Refresh branches for the current company
+        setSelectedCompanyForClientFilter(companyId); // Keep client company filter in sync
+        setSelectedBranchForClientFilter(''); // Clear client branch filter
         setManagedClients([]); // Clear managed clients as they might be deleted
-        setBranchesForClientFilter([]); // Clear branches for client filter
+        setBranchesForClientDropdown([]); // Refresh client's branch dropdown
       } else {
         setError(data.message || 'Failed to delete branch.');
       }
     } catch (err) {
-      console.error('Error deleting branch:', err);
+      console.error('ManageEntities: Error deleting branch:', err);
       setError('Network error deleting branch.');
     } finally {
       setIsLoading(false);
@@ -414,60 +444,80 @@ const ManageEntities = ({
   };
 
   // --- Client CRUD Operations ---
-  const handleCreateClient = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    setSuccessMessage('');
+  // ManageEntities.jsx
+const handleCreateClient = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
+  setError('');
+  setSuccessMessage('');
 
-    if (!newClientEmail || !newClientPassword || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClient && !selectedBranchForClient)) {
-      setError('All client creation fields and a parent company/branch are required.');
-      setIsLoading(false);
-      return;
-    }
+  if (!newClientEmail || !newClientPassword || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClientFilter && !selectedBranchForClientFilter)) {
+    setError('All client creation fields and a parent company/branch are required.');
+    setIsLoading(false);
+    return;
+  }
 
-    let url = '';
-    let payload = {
-      clientEmail: newClientEmail,
-      clientPassword: newClientPassword,
-      customerName: newCustomerName,
-      customerMobile: newCustomerMobile,
-      notificationEmails: parseEmailsString(newClientNotificationEmails),
-    };
-
-    if (selectedBranchForClient) {
-      url = `${API_BASE_URL}/superuser/branches/${selectedBranchForClient}/clients`;
-    } else if (selectedCompanyForClient) {
-      url = `${API_BASE_URL}/superuser/companies/${selectedCompanyForClient}/clients`;
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSuccessMessage('Client created successfully!');
-        setNewClientEmail('');
-        setNewClientPassword('');
-        setNewCustomerName('');
-        setNewCustomerMobile('');
-        setNewClientNotificationEmails('');
-        setShowAddClientForm(false);
-        // Refresh clients based on current selection
-        fetchClientsByBranchOrCompany(selectedCompanyForClient, selectedBranchForClient);
-      } else {
-        setError(data.message || 'Failed to create client.');
-      }
-    } catch (err) {
-      console.error('Error creating client:', err);
-      setError('Network error creating client.');
-    } finally {
-      setIsLoading(false);
-    }
+  let url = '';
+  let payload = {
+    clientEmail: newClientEmail,
+    clientPassword: newClientPassword,
+    customerName: newCustomerName,
+    customerMobile: newCustomerMobile,
+    notificationEmails: parseEmailsString(newClientNotificationEmails),
   };
+
+  // Prioritize creating client under a branch if selected
+  if (selectedBranchForClientFilter) {
+    url = `${API_BASE_URL}/superuser/branches/${selectedBranchForClientFilter}/clients`;
+    // Only include branchId in payload if your backend specifically expects it in the body
+    // along with being in the URL for this endpoint. More commonly, if it's in the URL,
+    // it's not needed in the body. Let's assume for now it's not needed in body if in URL.
+    // However, if your backend uses this for an explicit association in the body, keep it.
+    // payload.branchId = selectedBranchForClientFilter;
+    // Do NOT send companyId in the payload if creating via branch endpoint, unless your backend explicitly requires it.
+    // The backend should derive company from branch.
+  } else if (selectedCompanyForClientFilter) {
+    url = `${API_BASE_URL}/superuser/companies/${selectedCompanyForClientFilter}/clients`;
+    payload.companyId = selectedCompanyForClientFilter; // Company ID is directly relevant here
+  } else {
+    // This case should ideally be caught by the initial validation, but as a fallback:
+    setError('Please select a company or branch for the new client.');
+    setIsLoading(false);
+    return;
+  }
+
+  // --- Crucial Debugging Step ---
+  console.log('Sending client creation request to URL:', url);
+  console.log('With payload:', payload);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setSuccessMessage('Client created successfully!');
+      setNewClientEmail('');
+      setNewClientPassword('');
+      setNewCustomerName('');
+      setNewCustomerMobile('');
+      setNewClientNotificationEmails('');
+      setShowAddClientForm(false);
+      fetchClientsByBranchOrCompany(selectedCompanyForClientFilter, selectedBranchForClientFilter);
+    } else {
+      // THIS IS WHERE YOU GET THE DETAILED ERROR FROM YOUR BACKEND
+      setError(data.message || 'Failed to create client.');
+      console.error("ManageEntities: Failed to create client:", data.message);
+    }
+  } catch (err) {
+    console.error('ManageEntities: Error creating client:', err);
+    setError('Network error creating client.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleEditClient = (client) => {
     setEditingClient(client);
@@ -476,14 +526,10 @@ const ManageEntities = ({
     setNewCustomerName(client.customerName || '');
     setNewCustomerMobile(client.customerMobile || '');
     setNewClientNotificationEmails(formatEmailsArray(client.notificationEmails));
-    setSelectedCompanyForClient(client.company?._id || client.company || '');
-    setSelectedBranchForClient(client.branch?._id || client.branch || '');
-    // When editing, ensure branches for the client's company are loaded for the dropdown
-    if (client.company?._id || client.company) {
-      fetchBranchesForClientFilter(client.company?._id || client.company);
-    } else {
-      setBranchesForClientFilter([]);
-    }
+    setSelectedCompanyForClientFilter(client.company?._id || client.company || '');
+    setSelectedBranchForClientFilter(client.branch?._id || client.branch || '');
+    // Ensure branches for the client's company are loaded for the dropdown
+    fetchBranchesForClientDropdown(client.company?._id || client.company || '');
     setShowAddClientForm(true);
   };
 
@@ -493,7 +539,7 @@ const ManageEntities = ({
     setError('');
     setSuccessMessage('');
 
-    if (!editingClient || !newClientEmail || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClient && !selectedBranchForClient)) {
+    if (!editingClient || !newClientEmail || !newCustomerName || !newCustomerMobile || (!selectedCompanyForClientFilter && !selectedBranchForClientFilter)) {
       setError('All fields are required for update and a parent company/branch must be selected.');
       setIsLoading(false);
       return;
@@ -508,8 +554,8 @@ const ManageEntities = ({
           ...(newClientPassword && { clientPassword: newClientPassword }),
           customerName: newCustomerName,
           customerMobile: newCustomerMobile,
-          branchId: selectedBranchForClient || null,
-          companyId: selectedCompanyForClient || null,
+          branchId: selectedBranchForClientFilter || null,
+          companyId: selectedCompanyForClientFilter || null,
           notificationEmails: parseEmailsString(newClientNotificationEmails),
         }),
       });
@@ -524,12 +570,12 @@ const ManageEntities = ({
         setNewClientNotificationEmails('');
         setShowAddClientForm(false);
         // Refresh clients based on current selection
-        fetchClientsByBranchOrCompany(selectedCompanyForClient, selectedBranchForClient);
+        fetchClientsByBranchOrCompany(selectedCompanyForClientFilter, selectedBranchForClientFilter);
       } else {
         setError(data.message || 'Failed to update client.');
       }
     } catch (err) {
-      console.error('Error updating client:', err);
+      console.error('ManageEntities: Error updating client:', err);
       setError('Network error updating client.');
     } finally {
       setIsLoading(false);
@@ -557,7 +603,7 @@ const ManageEntities = ({
         setError(data.message || 'Failed to delete client.');
       }
     } catch (err) {
-      console.error('Error deleting client:', err);
+      console.error('ManageEntities: Error deleting client:', err);
       setError('Network error deleting client.');
     } finally {
       setIsLoading(false);
@@ -689,7 +735,7 @@ const ManageEntities = ({
               setNewBranchAdminEmail('');
               setNewBranchAdminPassword('');
               setNewBranchNotificationEmails('');
-              setSelectedCompanyForBranch(''); // Clear selected company
+              // Do not clear selectedCompanyForBranchFilter here, as it's used for the filter
             }
           }}
           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
@@ -701,13 +747,13 @@ const ManageEntities = ({
         <form onSubmit={editingBranch ? handleUpdateBranch : handleCreateBranch} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
           <h5 className="text-lg font-semibold text-gray-800">{editingBranch ? 'Edit Branch Details' : 'Create New Branch'}</h5>
           <div>
-            <label htmlFor="selectCompanyForBranch" className="block text-sm font-medium text-gray-700">Select Company:</label>
+            <label htmlFor="selectCompanyForBranchForm" className="block text-sm font-medium text-gray-700">Select Company:</label>
             <select
-              id="selectCompanyForBranch"
+              id="selectCompanyForBranchForm"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              value={selectedCompanyForBranch}
+              value={selectedCompanyForBranchFilter}
               onChange={(e) => {
-                setSelectedCompanyForBranch(e.target.value);
+                setSelectedCompanyForBranchFilter(e.target.value);
                 setManagedBranches([]); // Clear branches when company changes
               }}
               required
@@ -779,14 +825,10 @@ const ManageEntities = ({
         <select
           id="filterCompanyForBranches"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          value={selectedCompanyForBranch}
+          value={selectedCompanyForBranchFilter}
           onChange={(e) => {
-            setSelectedCompanyForBranch(e.target.value);
-            setManagedBranches([]); // Clear branches when filter changes
-            setManagedClients([]); // Clear clients as well
-            setSelectedCompanyForClient(e.target.value); // Keep client company filter in sync
-            setSelectedBranchForClient(''); // Reset client branch filter
-            fetchBranchesForClientFilter(e.target.value); // Refresh client's branch dropdown
+            setSelectedCompanyForBranchFilter(e.target.value);
+            // No need to call fetchBranchesByCompany here, useEffect will handle it
           }}
         >
           <option value="">-- Select a Company to Filter --</option>
@@ -794,19 +836,12 @@ const ManageEntities = ({
             <option key={company._id} value={company._id}>{company.name}</option>
           ))}
         </select>
-        <button
-          onClick={() => fetchBranchesByCompany(selectedCompanyForBranch)}
-          className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
-          disabled={isLoading || !selectedCompanyForBranch}
-        >
-          Load Branches
-        </button>
       </div>
 
-      {!selectedCompanyForBranch && (
+      {!selectedCompanyForBranchFilter && (
         <p className="text-gray-600 text-center py-4">Select a company above to view its branches.</p>
       )}
-      {selectedCompanyForBranch && managedBranches.length === 0 && !isLoading && !error && (
+      {selectedCompanyForBranchFilter && managedBranches.length === 0 && !isLoading && !error && (
         <p className="text-gray-600 text-center py-4">No branches found for this company. Add a new branch.</p>
       )}
       {managedBranches.length > 0 && (
@@ -853,9 +888,9 @@ const ManageEntities = ({
               setNewCustomerName('');
               setNewCustomerMobile('');
               setNewClientNotificationEmails('');
-              setSelectedCompanyForClient('');
-              setSelectedBranchForClient('');
-              setBranchesForClientFilter([]); // Clear branches for client form
+              setSelectedCompanyForClientFilter(''); // Clear selected company for form
+              setSelectedBranchForClientFilter(''); // Clear selected branch for form
+              setBranchesForClientDropdown([]); // Clear branches for client form
             }
           }}
           className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
@@ -871,11 +906,11 @@ const ManageEntities = ({
             <select
               id="selectCompanyForClientForm"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              value={selectedCompanyForClient}
+              value={selectedCompanyForClientFilter}
               onChange={(e) => {
-                setSelectedCompanyForClient(e.target.value);
-                setSelectedBranchForClient(''); // Clear branch when company changes
-                fetchBranchesForClientFilter(e.target.value); // Fetch branches for client form dropdown
+                setSelectedCompanyForClientFilter(e.target.value);
+                setSelectedBranchForClientFilter(''); // Clear branch when company changes
+                // No need to call fetchBranchesForClientDropdown here, useEffect will handle it
               }}
             >
               <option value="">-- Select a Company --</option>
@@ -884,17 +919,17 @@ const ManageEntities = ({
               ))}
             </select>
           </div>
-          {selectedCompanyForClient && (
+          {selectedCompanyForClientFilter && (
             <div>
               <label htmlFor="selectBranchForClientForm" className="block text-sm font-medium text-gray-700">Select Branch (Optional):</label>
               <select
                 id="selectBranchForClientForm"
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                value={selectedBranchForClient}
-                onChange={(e) => setSelectedBranchForClient(e.target.value)}
+                value={selectedBranchForClientFilter}
+                onChange={(e) => setSelectedBranchForClientFilter(e.target.value)}
               >
                 <option value="">-- Select a Branch --</option>
-                {branchesForClientFilter.map(branch => ( // Use branchesForClientFilter here
+                {branchesForClientDropdown.map(branch => ( // Use branchesForClientDropdown here
                   <option key={branch._id} value={branch._id}>{branch.name}</option>
                 ))}
               </select>
@@ -967,12 +1002,11 @@ const ManageEntities = ({
       )}
       <div className="flex space-x-4 mb-4">
         <select
-          value={selectedCompanyForClient}
+          value={selectedCompanyForClientFilter}
           onChange={(e) => {
-            setSelectedCompanyForClient(e.target.value);
-            setSelectedBranchForClient(''); // Reset branch filter when company changes
-            fetchBranchesForClientFilter(e.target.value); // Fetch branches for client filter dropdown
-            setManagedClients([]); // Clear clients when company changes
+            setSelectedCompanyForClientFilter(e.target.value);
+            setSelectedBranchForClientFilter(''); // Reset branch filter when company changes
+            // No need to call fetchClientsByBranchOrCompany here, useEffect will handle it
           }}
           className="mt-1 block w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
         >
@@ -982,32 +1016,25 @@ const ManageEntities = ({
           ))}
         </select>
         <select
-          value={selectedBranchForClient}
+          value={selectedBranchForClientFilter}
           onChange={(e) => {
-            setSelectedBranchForClient(e.target.value);
-            setManagedClients([]); // Clear clients when branch changes
+            setSelectedBranchForClientFilter(e.target.value);
+            // No need to call fetchClientsByBranchOrCompany here, useEffect will handle it
           }}
           className="mt-1 block w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          disabled={!selectedCompanyForClient} // Disable if no company selected
+          disabled={!selectedCompanyForClientFilter} // Disable if no company selected
         >
           <option value="">Filter by Branch</option>
-          {branchesForClientFilter.map(branch => ( // Use branchesForClientFilter here
+          {branchesForClientDropdown.map(branch => ( // Use branchesForClientDropdown here
             <option key={branch._id} value={branch._id}>{branch.name}</option>
           ))}
         </select>
-        <button
-          onClick={() => fetchClientsByBranchOrCompany(selectedCompanyForClient, selectedBranchForClient)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-          disabled={isLoading || (!selectedCompanyForClient && !selectedBranchForClient)} // Disable if no filters selected
-        >
-          Apply Client Filters
-        </button>
       </div>
 
-      {!selectedCompanyForClient && !selectedBranchForClient && (
+      {!selectedCompanyForClientFilter && !selectedBranchForClientFilter && (
         <p className="text-gray-600 text-center py-4">Select a company or branch above to view its clients.</p>
       )}
-      {(selectedCompanyForClient || selectedBranchForClient) && managedClients.length === 0 && !isLoading && !error && (
+      {(selectedCompanyForClientFilter || selectedBranchForClientFilter) && managedClients.length === 0 && !isLoading && !error && (
         <p className="text-gray-600 text-center py-4">No clients found matching the selected filters. Add a new client.</p>
       )}
       {managedClients.length > 0 && (

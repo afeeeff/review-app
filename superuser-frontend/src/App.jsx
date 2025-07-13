@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ManageEntities from './ManageEntities.jsx';
 import ViewReviews from './ViewReviews.jsx';
+import Statistics from './Statistics.jsx'; // Import the new Statistics component
 
 // Main App component for the Superuser Interface
 const App = () => {
@@ -13,8 +14,8 @@ const App = () => {
   const [loginError, setLoginError] = useState('');
   // State to store the authenticated user's data (including token, role, etc.)
   const [userData, setUserData] = useState(null);
-  // State for managing active tab in the dashboard: 'manage' or 'reviews'
-  const [activeTab, setActiveTab] = useState('manage');
+  // State for managing active tab in the dashboard: 'manage', 'reviews', or 'statistics'
+  const [activeTab, setActiveTab] = useState('manage'); // Default to 'manage'
 
   // Global states for loading, error, and success messages
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +30,7 @@ const App = () => {
   const [forgotPasswordMessage, setForgotPasswordMessage] = useState('');
   const [forgotPasswordError, setForgotPasswordError] = useState('');
 
-  // State to hold all companies (needed for filters in both manage & reviews)
+  // State to hold all companies (needed for filters in both manage & reviews & statistics)
   const [companies, setCompanies] = useState([]);
 
   // Base URL for your backend API
@@ -39,6 +40,8 @@ const App = () => {
       : 'https://review-app-backend-ekjk.onrender.com/api'; // IMPORTANT: Ensure this includes /api
 
   // Helper to get auth headers
+  // This function is crucial for attaching the JWT to API requests.
+  // It uses optional chaining (`?.`) to safely access `userData.token`.
   const getAuthHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${userData?.token}`,
@@ -46,52 +49,76 @@ const App = () => {
 
   // Effect to check for stored token on component mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('superuserToken');
     const storedUserData = localStorage.getItem('superuserUserData');
 
-    if (storedToken && storedUserData) {
+    if (storedUserData) {
       try {
         const parsedUserData = JSON.parse(storedUserData);
-        // Basic validation: ensure it's a superuser token
-        if (parsedUserData.role === 'superuser') {
+        console.log("App.jsx: Loaded userData from localStorage:", parsedUserData);
+
+        // Crucial check: Ensure token exists and role is superuser
+        if (parsedUserData && parsedUserData.token && parsedUserData.role === 'superuser') {
           setUserData(parsedUserData);
           setCurrentView('dashboard');
+          console.log("App.jsx: Valid superuser data found in localStorage, setting dashboard view.");
         } else {
-          // If a non-superuser token is found, clear it
-          localStorage.removeItem('superuserToken');
+          // If token is missing, invalid, or not a superuser, clear storage
+          console.warn("App.jsx: Stored user data is invalid or not superuser, clearing localStorage.");
           localStorage.removeItem('superuserUserData');
+          setUserData(null);
+          setCurrentView('login');
         }
       } catch (error) {
-        console.error('Failed to parse stored user data:', error);
-        localStorage.removeItem('superuserToken');
-        localStorage.removeItem('superuserUserData');
+        console.error('App.jsx: Failed to parse stored user data from localStorage:', error);
+        localStorage.removeItem('superuserUserData'); // Clear potentially corrupted data
+        setUserData(null);
+        setCurrentView('login');
       }
+    } else {
+      console.log("App.jsx: No superuser data found in localStorage, defaulting to login view.");
+      setCurrentView('login');
     }
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount
 
   // Effect to fetch initial companies when dashboard is loaded and user is authenticated
   useEffect(() => {
+    // Only fetch companies if we are in the dashboard view and userData (including token) is available
     if (currentView === 'dashboard' && userData?.token) {
+      console.log("App.jsx: Dashboard view and user data present. Triggering fetchAllCompanies.");
       fetchAllCompanies();
+    } else if (currentView === 'dashboard' && !userData?.token) {
+      // If in dashboard but token is missing (e.g., after a refresh and token was bad)
+      console.warn("App.jsx: In dashboard view but no valid token. Redirecting to login.");
+      setCurrentView('login');
+      setUserData(null);
+      localStorage.removeItem('superuserUserData');
     }
-  }, [currentView, userData?.token]); // Depend on userData.token to re-fetch on login
+  }, [currentView, userData?.token]); // Depend on currentView and userData.token to re-fetch on login/view change
 
-  // Fetch all companies (used by both ManageEntities and ViewReviews for filters)
+  // Fetch all companies (used by ManageEntities, ViewReviews, and Statistics for filters)
   const fetchAllCompanies = async () => {
     setIsLoading(true);
     setError('');
     try {
       const response = await fetch(`${API_BASE_URL}/superuser/companies`, {
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(), // Use the helper to get headers
       });
       const data = await response.json();
       if (response.ok) {
         setCompanies(data);
+        console.log("App.jsx: Companies fetched successfully:", data);
       } else {
-        setError(data.message || 'Failed to fetch companies.');
+        // If 401 or 403, it means token is invalid/expired, force logout
+        if (response.status === 401 || response.status === 403) {
+          setError('Session expired or unauthorized. Please log in again.');
+          handleLogout(); // Force logout
+        } else {
+          setError(data.message || 'Failed to fetch companies.');
+        }
+        console.error("App.jsx: Failed to fetch companies:", data.message);
       }
     } catch (err) {
-      console.error('Error fetching companies:', err);
+      console.error('App.jsx: Error fetching companies:', err);
       setError('Network error fetching companies.');
     } finally {
       setIsLoading(false);
@@ -117,22 +144,34 @@ const App = () => {
       const data = await response.json();
 
       if (response.ok) {
-        if (data.role === 'superuser') {
-          // Store token and user data in local storage
-          localStorage.setItem('superuserToken', data.token);
+        console.log("App.jsx: Raw login successful data:", data); // Log the raw data
+        // IMPORTANT: Check if `data.token` exists and is a string
+        if (data.role === 'superuser' && typeof data.token === 'string' && data.token.length > 0) {
+          // Store user data (including token) in local storage
           localStorage.setItem('superuserUserData', JSON.stringify(data));
           setUserData(data);
           setCurrentView('dashboard');
-          // Fetch companies immediately after successful login
-          fetchAllCompanies();
+          setLoginError(''); // Clear any login errors
+          console.log("App.jsx: Superuser login successful, token verified and stored.");
+          // fetchAllCompanies will be triggered by the useEffect due to userData change
         } else {
-          setLoginError('Access Denied: Not a Superuser account.');
+          // If token is missing, malformed, or not a superuser
+          const errorMessage = data.role !== 'superuser'
+            ? 'Access Denied: Not a Superuser account.'
+            : 'Login successful but token missing or invalid. Please contact support.';
+          setLoginError(errorMessage);
+          console.error("App.jsx: Login successful but token issue:", errorMessage, data);
+          setUserData(null); // Ensure no partial data is stored
+          localStorage.removeItem('superuserUserData');
         }
       } else {
         setLoginError(data.message || 'Login failed. Please check your credentials.');
+        console.error("App.jsx: Login failed with response:", data.message);
+        setUserData(null); // Clear user data on failed login
+        localStorage.removeItem('superuserUserData'); // Clear stored data
       }
     } catch (error) {
-      console.error('Login API error:', error);
+      console.error('App.jsx: Login API request error:', error);
       setLoginError('Network error or server unavailable. Please try again.');
     } finally {
       setIsLoading(false);
@@ -141,8 +180,8 @@ const App = () => {
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem('superuserToken');
-    localStorage.removeItem('superuserUserData');
+    console.log("App.jsx: Logging out user.");
+    localStorage.removeItem('superuserUserData'); // Only one item to remove now
     setUserData(null);
     setCurrentView('login');
     setEmail('');
@@ -178,7 +217,7 @@ const App = () => {
         setForgotPasswordError(data.message || 'Failed to send OTP. Please try again.');
       }
     } catch (error) {
-      console.error('Request OTP API error:', error);
+      console.error('App.jsx: Request OTP API error:', error);
       setForgotPasswordError('Network error or server unavailable. Please try again.');
     } finally {
       setIsLoading(false);
@@ -230,7 +269,7 @@ const App = () => {
         setForgotPasswordError(data.message || 'Failed to reset password. Please check your OTP or try again.');
       }
     } catch (error) {
-      console.error('Reset password API error:', error);
+      console.error('App.jsx: Reset password API error:', error);
       setForgotPasswordError('Network error or server unavailable. Please try again.');
     } finally {
       setIsLoading(false);
@@ -249,7 +288,8 @@ const App = () => {
           body {
             font-family: 'Inter', sans-serif;
           }
-          /* Custom styles for table responsiveness */
+          /* Custom styles for table responsiveness in ViewReviews */
+          /* These styles are also included in ViewReviews.jsx for self-containment */
           @media screen and (max-width: 768px) {
             table, thead, tbody, th, td, tr {
               display: block;
@@ -278,6 +318,17 @@ const App = () => {
               font-weight: bold;
               color: #4a5568; /* Tailwind gray-700 */
             }
+            /* Label the data - these are specific to ViewReviews table */
+            td:nth-of-type(1):before { content: "Rating:"; }
+            td:nth-of-type(2):before { content: "Customer Name:"; }
+            td:nth-of-type(3):before { content: "Customer Mobile:"; }
+            td:nth-of-type(4):before { content: "Client Email:"; }
+            td:nth-of-type(5):before { content: "Company:"; }
+            td:nth-of-type(6):before { content: "Branch:"; }
+            td:nth-of-type(7):before { content: "Review Text:"; }
+            td:nth-of-type(8):before { content: "Voice Audio:"; }
+            td:nth-of-type(9):before { content: "Invoice Data:"; }
+            td:nth-of-type(10):before { content: "Date:"; }
             .max-w-\[150px\] {
               max-width: 100% !important; /* Override fixed width on small screens */
             }
@@ -518,6 +569,17 @@ const App = () => {
                         >
                           View Reviews
                         </button>
+                        {/* NEW: Statistics Tab Button */}
+                        <button
+                          onClick={() => setActiveTab('statistics')}
+                          className={`px-6 py-3 text-lg font-medium ${
+                            activeTab === 'statistics'
+                              ? 'border-b-4 border-indigo-600 text-indigo-700'
+                              : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                          } focus:outline-none transition-colors duration-200`}
+                        >
+                          Statistics
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -550,6 +612,20 @@ const App = () => {
                   )}
                   {activeTab === 'reviews' && (
                     <ViewReviews
+                      userData={userData}
+                      API_BASE_URL={API_BASE_URL}
+                      isLoading={isLoading}
+                      error={error}
+                      successMessage={successMessage}
+                      setIsLoading={setIsLoading}
+                      setError={setError}
+                      setSuccessMessage={setSuccessMessage}
+                      companies={companies} // Pass companies for filtering
+                    />
+                  )}
+                  {/* NEW: Render Statistics component */}
+                  {activeTab === 'statistics' && (
+                    <Statistics
                       userData={userData}
                       API_BASE_URL={API_BASE_URL}
                       isLoading={isLoading}

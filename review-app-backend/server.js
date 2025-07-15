@@ -33,9 +33,9 @@ const allowedOrigins = [
       'https://company-frontend-tdh3.onrender.com',
       'https://review-app-frontend.onrender.com',
       'https://superuser.instantreviews.in',
-      'https://.instantreviews.in',
-      'https://superuser.instantreviews.in',
-      'https://superuser.instantreviews.in/'
+      'https://companyadmin.instantreviews.in',
+      'https://branchadmin.instantreviews.in',
+      'https://clientadmin.instantreviews.in'
 
        // <--- REPLACE THIS WITH YOUR ACTUAL DEPLOYED FRONTEND URL
       // Add any other specific frontend origins if you have them (e.g., a staging frontend)

@@ -35,7 +35,8 @@ const allowedOrigins = [
       'https://superuser.instantreviews.in',
       'https://company.instantreviews.in',
       'https://branch.instantreviews.in',
-      'https://client.instantreviews.in'
+      'https://client.instantreviews.in',
+      'https://review-app-orpin.vercel.app'
 
        // <--- REPLACE THIS WITH YOUR ACTUAL DEPLOYED FRONTEND URL
       // Add any other specific frontend origins if you have them (e.g., a staging frontend)

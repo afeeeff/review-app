@@ -120,7 +120,7 @@ const Dashboard = ({
     setAverageRating(total ? (sum / total).toFixed(2) : 0);
     setFeedbackTypeData([
       { name: 'Promoters (9–10)', value: promotersCount },
-      { name: 'Passives (7–8)', value: neutralCount },
+      { name: 'Neutrals (7–8)', value: neutralCount },
       { name: 'Detractors (1–6)', value: detractorsCount }
     ]);
   }, [reviews]);
@@ -243,7 +243,7 @@ const Dashboard = ({
           <div style={{ fontSize: 13, color: '#d32f2f', fontWeight: 600 }}>TNPS 1–6</div>
         </div>
         <div style={statCard(COLORS_PANELS.neutral)}>
-          <div style={cardHeading(COLORS_PANELS.neutral)}>Passives %</div>
+          <div style={cardHeading(COLORS_PANELS.neutral)}>Neutrals %</div>
           <div style={cardValue(COLORS_PANELS.neutral)}>
             {neutral.pct}%<sup style={{ fontSize: 15, color: "#178d57", marginLeft: 4 }}>{neutral.count}</sup>
           </div>

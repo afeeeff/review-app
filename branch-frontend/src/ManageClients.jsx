@@ -169,11 +169,11 @@ const ManageClients = ({
   };
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h3 className="text-2xl font-semibold text-gray-800 mb-4">Manage Clients</h3>
+    <div className="p-6 bg-gray-50 rounded-lg shadow-md">
+      <h3 className="text-2xl font-bold text-gray-800 mb-6">Manage Clients</h3>
 
       {isLoading && (
-        <div className="text-center text-indigo-600 font-semibold mb-4">Loading...</div>
+        <div className="text-center text-purple-600 font-semibold mb-4">Loading...</div>
       )}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
@@ -188,31 +188,33 @@ const ManageClients = ({
         </div>
       )}
 
-      <div className="mb-8 p-6 bg-purple-50 rounded-lg shadow-inner">
+      <div className="mb-8 p-6 bg-purple-50 rounded-lg shadow-inner border border-purple-200">
         <div className="flex justify-between items-center mb-4">
-          <h4 className="text-xl font-semibold text-purple-800">Your Clients</h4>
-          <button
-            onClick={() => {
-              setShowAddClientForm(!showAddClientForm);
-              // Clear form fields when toggling to add mode
-              if (!showAddClientForm) {
-                setEditingClient(null);
-                setNewClientEmail('');
-                setNewClientPassword('');
-                setNewCustomerName('');
-                setNewCustomerMobile('');
-                setNewClientNotificationEmails('');
-              }
-            }}
-            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
-          >
-            {showAddClientForm ? 'Hide Add Client Form' : 'Add New Client'}
-          </button>
+          <h4 className="text-xl font-semibold text-purple-800 flex items-center">
+            Your Clients
+            {/*<button
+              onClick={() => {
+                setShowAddClientForm(!showAddClientForm);
+                // Clear form fields when toggling to add mode
+                if (!showAddClientForm) {
+                  setEditingClient(null);
+                  setNewClientEmail('');
+                  setNewClientPassword('');
+                  setNewCustomerName('');
+                  setNewCustomerMobile('');
+                  setNewClientNotificationEmails('');
+                }
+              }}
+              className="ml-4 px-5 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200 shadow-md transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            >
+              {editingClient ? 'Edit Client' : 'Create Client'}
+            </button>*/}
+          </h4>
         </div>
 
         {showAddClientForm && (
-          <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
-            <h5 className="text-lg font-semibold text-gray-800">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
+          <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-6 rounded-lg bg-white mb-6 shadow-lg">
+            <h5 className="text-lg font-bold text-gray-800 mb-4">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
             <div>
               <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">Client Email:</label>
               <input
@@ -270,14 +272,7 @@ const ManageClients = ({
                 placeholder="e.g., email1@example.com, email2@example.com"
               ></textarea>
             </div>
-            <div className="flex space-x-2">
-              <button
-                type="submit"
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Add Client')}
-              </button>
+            <div className="flex justify-end space-x-4 mt-6">
               <button
                 type="button"
                 onClick={() => {
@@ -289,10 +284,16 @@ const ManageClients = ({
                   setNewClientNotificationEmails('');
                   setShowAddClientForm(false);
                 }}
-                className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
+              >
+                Discard
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
                 disabled={isLoading}
               >
-                Cancel
+                {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Save Client')}
               </button>
             </div>
           </form>
@@ -300,20 +301,20 @@ const ManageClients = ({
 
         {clients.length === 0 && !isLoading && <p className="text-gray-600">No clients found for your branch.</p>}
         {clients.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto mt-6 border border-gray-200 rounded-lg shadow-md">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Client Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Customer Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Customer Mobile</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Notification Emails</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {clients.map((client) => (
-                  <tr key={client._id}>
+                  <tr key={client._id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.email}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerName || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
@@ -321,13 +322,13 @@ const ManageClients = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => handleEditClient(client)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        className="text-indigo-600 hover:text-indigo-900 mr-4 font-semibold"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDeleteClient(client._id)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 hover:text-red-900 font-semibold"
                       >
                         Delete
                       </button>

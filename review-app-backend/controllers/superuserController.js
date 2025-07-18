@@ -6,6 +6,7 @@ const Branch = require('../models/Branch');
 const Review = require('../models/Review'); // To fetch reviews
 const jwt = require('jsonwebtoken'); // For generating tokens for new users
 const mongoose = require('mongoose'); // Import mongoose for session
+const emailService = require('../services/emailService'); // Import email service
 
 // Helper function to generate JWT for newly created users
 const generateToken = (id, role, companyId = null, branchId = null) => {
@@ -63,8 +64,18 @@ exports.createCompany = async (req, res) => {
     // Generate token for the newly created company admin
     const adminToken = generateToken(companyAdminUser._id, companyAdminUser.role, company._id);
 
+    // --- NEW: Send email to Company Admin ---
+    await emailService.sendAccountCreationEmail({
+      recipientEmail: adminEmail,
+      username: adminEmail,
+      password: adminPassword, // Send plain password for initial login
+      role: 'Company Admin',
+      loginLink: 'company.instantreviews.in'
+    });
+    // --- END NEW EMAIL ---
+
     res.status(201).json({
-      message: 'Company and Company Admin created successfully!',
+      message: 'Company and Company Admin created successfully! Account credentials sent to admin email.',
       company: {
         _id: company._id,
         name: company.name,
@@ -284,8 +295,18 @@ exports.createBranch = async (req, res) => {
     // Generate token for the newly created branch admin
     const adminToken = generateToken(branchAdminUser._id, branchAdminUser.role, company._id, branch._id);
 
+    // --- NEW: Send email to Branch Admin ---
+    await emailService.sendAccountCreationEmail({
+      recipientEmail: adminEmail,
+      username: adminEmail,
+      password: adminPassword, // Send plain password for initial login
+      role: 'Branch Admin',
+      loginLink: 'branch.instantreviews.in'
+    });
+    // --- END NEW EMAIL ---
+
     res.status(201).json({
-      message: 'Branch and Branch Admin created successfully!',
+      message: 'Branch and Branch Admin created successfully! Account credentials sent to admin email.',
       branch: {
         _id: branch._id,
         name: branch.name,
@@ -495,8 +516,18 @@ exports.createClient = async (req, res) => {
     // Generate token for the newly created client
     const clientToken = generateToken(clientUser._id, clientUser.role, clientUser.company, clientUser.branch);
 
+    // --- NEW: Send email to Client ---
+    await emailService.sendAccountCreationEmail({
+      recipientEmail: clientEmail,
+      username: clientEmail,
+      password: clientPassword, // Send plain password for initial login
+      role: 'Client',
+      loginLink: 'client.instantreviews.in'
+    });
+    // --- END NEW EMAIL ---
+
     res.status(201).json({
-      message: 'Client user created successfully!',
+      message: 'Client user created successfully! Account credentials sent to client email.',
       client: {
         _id: clientUser._id,
         email: clientUser.email,

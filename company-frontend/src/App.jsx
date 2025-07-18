@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, Fragment } from 'react'; // Import Fragment
+import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import ManageEntities from './ManageEntities.jsx';
-import ViewReviews from './ViewReviews.jsx';
-import Statistics from './Statistics.jsx'; // Import the new Statistics component
+import Dashboard from './Dashboard.jsx'; // Now this will be the combined Dashboard
 
 // Main App component for the Company Admin Interface
 const App = () => {
@@ -14,8 +13,8 @@ const App = () => {
   const [loginError, setLoginError] = useState('');
   // State to store the authenticated user's data (including token, role, companyId, etc.)
   const [userData, setUserData] = useState(null);
-  // State for managing active tab in the dashboard: 'manage', 'reviews', or 'statistics'
-  const [activeTab, setActiveTab] = useState('manage'); // Default to 'manage'
+  // State for managing active tab in the dashboard: 'dashboard' or 'manage'
+  const [activeTab, setActiveTab] = useState('dashboard'); // Default to 'dashboard' as per request
 
   // States for managing entities data (branches and clients specific to this company)
   const [branches, setBranches] = useState([]);
@@ -197,6 +196,7 @@ const App = () => {
         if (parsedUserData.role === 'company_admin' && parsedUserData.companyId && parsedUserData.token) {
           setUserData(parsedUserData);
           setCurrentView('dashboard');
+          setActiveTab('dashboard'); // Set active tab to dashboard on successful re-login
         } else {
           // If a non-company_admin token is found or companyId/token is missing, clear it
           console.warn("App.jsx: Stored user data is invalid or not company admin, clearing localStorage.");
@@ -249,6 +249,7 @@ const App = () => {
           localStorage.setItem('companyAdminUserData', JSON.stringify(data));
           setUserData(data);
           setCurrentView('dashboard');
+          setActiveTab('dashboard'); // Set active tab to dashboard after successful login
           setLoginError('');
         } else {
           setLoginError('Access Denied: Not a Company Admin account or missing company association/token.');
@@ -530,36 +531,27 @@ const App = () => {
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-start h-16">
+            {/* Dashboard Tab */}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-6 py-3 text-lg font-semibold ${
+                activeTab === 'dashboard'
+                  ? 'border-b-4 border-green-600 text-green-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              } focus:outline-none transition-colors duration-200`}
+            >
+              Dashboard
+            </button>
+            {/* Manage Entities Tab */}
             <button
               onClick={() => setActiveTab('manage')}
-              className={`px-6 py-3 text-lg font-medium ${
+              className={`px-6 py-3 text-lg font-semibold ${
                 activeTab === 'manage'
                   ? 'border-b-4 border-green-600 text-green-700'
                   : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
               } focus:outline-none transition-colors duration-200`}
             >
-              Manage Branches & Clients
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'reviews'
-                  ? 'border-b-4 border-green-600 text-green-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              View Reviews
-            </button>
-            {/* NEW: Statistics Tab Button */}
-            <button
-              onClick={() => setActiveTab('statistics')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'statistics'
-                  ? 'border-b-4 border-green-600 text-green-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              Statistics
+              Manage Entities
             </button>
           </div>
         </div>
@@ -576,6 +568,21 @@ const App = () => {
           <span className="block sm:inline"> {successMessage}</span>
         </div>}
 
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            userData={userData}
+            API_BASE_URL={API_BASE_URL}
+            isLoading={isLoading}
+            error={error}
+            successMessage={successMessage}
+            setIsLoading={setIsLoading}
+            setError={setError}
+            setSuccessMessage={setSuccessMessage}
+            branches={branches} // Pass branches for filter dropdown
+            filteredClients={filteredClients} // Pass filtered clients for dropdown
+            fetchClientsForCompanyAdminFilters={fetchClientsForCompanyAdminFilters} // Pass function to update filtered clients
+          />
+        )}
         {activeTab === 'manage' && (
           <ManageEntities
             userData={userData}
@@ -591,36 +598,6 @@ const App = () => {
             allClients={allClients} // Pass allClients for management table
             fetchAllClientsForManagement={fetchAllClientsForManagement} // Pass function to refresh all clients
             fetchClientsByBranch={fetchClientsByBranch} // Pass function to fetch clients by branch
-          />
-        )}
-        {activeTab === 'reviews' && (
-          <ViewReviews
-            userData={userData}
-            API_BASE_URL={API_BASE_URL}
-            isLoading={isLoading}
-            error={error}
-            successMessage={successMessage}
-            setIsLoading={setIsLoading}
-            setError={setError}
-            setSuccessMessage={setSuccessMessage}
-            branches={branches} // Pass branches for filter dropdown
-            filteredClients={filteredClients} // Pass filtered clients for dropdown
-            fetchClientsForCompanyAdminFilters={fetchClientsForCompanyAdminFilters} // Pass function to update filtered clients
-          />
-        )}
-        {activeTab === 'statistics' && (
-          <Statistics
-            userData={userData}
-            API_BASE_URL={API_BASE_URL}
-            isLoading={isLoading}
-            error={error}
-            successMessage={successMessage}
-            setIsLoading={setIsLoading}
-            setError={setError}
-            setSuccessMessage={setSuccessMessage}
-            branches={branches} // Pass branches for filter dropdown
-            filteredClients={filteredClients} // Pass filtered clients for dropdown
-            fetchClientsForCompanyAdminFilters={fetchClientsForCompanyAdminFilters} // Pass function to update filtered clients
           />
         )}
       </main>

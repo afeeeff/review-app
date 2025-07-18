@@ -131,4 +131,56 @@ exports.sendReviewEmail = async (reviewDetails) => {
   }
 };
 
-module.exports = { sendEmail, sendReviewEmail: exports.sendReviewEmail }; // Export both functions
+/**
+ * Sends an account creation email with login credentials and a link.
+ * @param {object} accountDetails - Object containing account details for the email.
+ * @param {string} accountDetails.recipientEmail - The email address of the new account admin/user.
+ * @param {string} accountDetails.username - The username (email) for login.
+ * @param {string} accountDetails.password - The plain text password for initial login.
+ * @param {string} accountDetails.role - The role of the created account (e.g., 'Company Admin', 'Branch Admin', 'Client').
+ * @param {string} accountDetails.loginLink - The specific login URL for their role.
+ */
+exports.sendAccountCreationEmail = async (accountDetails) => {
+  const { recipientEmail, username, password, role, loginLink } = accountDetails;
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #28a745;">Your ${role} Account Has Been Created!</h2>
+      <p>Dear ${username},</p>
+      <p>Your account for the Customer Review App has been successfully created. You can now log in using the following credentials:</p>
+      <ul>
+        <li><strong>Username (Email):</strong> ${username}</li>
+        <li><strong>Password:</strong> ${password}</li>
+      </ul>
+      <p>Please use the link below to log in to your dashboard:</p>
+      <p style="margin-top: 20px;">
+        <a href="https://${loginLink}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold;">
+          Login to Your Dashboard
+        </a>
+      </p>
+      <p style="margin-top: 20px; font-size: 0.9em; color: #777;">
+        For security reasons, we recommend changing your password after your first login.
+      </p>
+      <p style="margin-top: 20px; font-size: 0.9em; color: #777;">
+        This is an automated email, please do not reply.
+      </p>
+    </div>
+  `;
+
+  const mailOptions = {
+    from: process.env.SENDER_EMAIL || 'noreply@yourcompany.com',
+    to: recipientEmail,
+    subject: `Welcome! Your ${role} Account Details for InstantReviews`,
+    html: emailHtml,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Account creation email sent to ${recipientEmail}: %s`, info.messageId);
+  } catch (error) {
+    console.error(`Error sending account creation email to ${recipientEmail}:`, error);
+    throw new Error('Failed to send account creation email.');
+  }
+};
+
+module.exports = { sendEmail, sendReviewEmail: exports.sendReviewEmail, sendAccountCreationEmail: exports.sendAccountCreationEmail };

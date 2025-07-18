@@ -15,6 +15,9 @@ const ManageEntities = ({
   fetchAllClientsForManagement, // Passed from App.jsx
   fetchClientsByBranch, // Passed from App.jsx
 }) => {
+  // State to control which entity type is currently displayed (Branch, Client)
+  const [selectedEntityType, setSelectedEntityType] = useState(''); // Initially empty
+
   // States for forms (Add/Edit) - Branch
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchAdminEmail, setNewBranchAdminEmail] = useState('');
@@ -33,7 +36,7 @@ const ManageEntities = ({
   const [editingClient, setEditingClient] = useState(null);
   const [showAddClientForm, setShowAddClientForm] = useState(false);
 
-  // NEW: State for filtering clients table by branch
+  // State for filtering clients table by branch
   const [filterBranchForClientTable, setFilterBranchForClientTable] = useState('');
 
 
@@ -350,29 +353,31 @@ const ManageEntities = ({
 
   // Render functions for branches and clients
   const renderBranchManagement = () => (
-    <div className="mb-8 p-6 bg-green-50 rounded-lg shadow-inner">
+    <div className="mb-8 p-6 bg-green-50 rounded-lg shadow-inner border border-green-200">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="text-xl font-semibold text-green-800">Branches</h4>
-        <button
-          onClick={() => {
-            setShowAddBranchForm(!showAddBranchForm);
-            if (!showAddBranchForm) {
-              setEditingBranch(null);
-              setNewBranchName('');
-              setNewBranchAdminEmail('');
-              setNewBranchAdminPassword('');
-              setNewBranchNotificationEmails('');
-            }
-          }}
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
-        >
-          {showAddBranchForm ? 'Hide Add Branch Form' : 'Add New Branch'}
-        </button>
+        <h4 className="text-xl font-semibold text-green-800 flex items-center">
+          Branches
+          {/*<button
+            onClick={() => {
+              setShowAddBranchForm(!showAddBranchForm);
+              if (!showAddBranchForm) {
+                setEditingBranch(null);
+                setNewBranchName('');
+                setNewBranchAdminEmail('');
+                setNewBranchAdminPassword('');
+                setNewBranchNotificationEmails('');
+              }
+            }}
+            className="ml-4 px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200 shadow-md transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            {editingBranch ? 'Edit Branch' : 'Create Branch'}
+          </button>*/}
+        </h4>
       </div>
 
       {showAddBranchForm && (
-        <form onSubmit={editingBranch ? handleUpdateBranch : handleCreateBranch} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
-          <h5 className="text-lg font-semibold text-gray-800">{editingBranch ? 'Edit Branch Details' : 'Create New Branch'}</h5>
+        <form onSubmit={editingBranch ? handleUpdateBranch : handleCreateBranch} className="space-y-4 border p-6 rounded-lg bg-white mb-6 shadow-lg">
+          <h5 className="text-lg font-bold text-gray-800 mb-4">{editingBranch ? 'Edit Branch Details' : 'Create New Branch'}</h5>
           <div>
             <label htmlFor="branchName" className="block text-sm font-medium text-gray-700">Branch Name:</label>
             <input
@@ -419,14 +424,7 @@ const ManageEntities = ({
               placeholder="e.g., email1@example.com, email2@example.com"
             ></textarea>
           </div>
-          <div className="flex space-x-2">
-            <button
-              type="submit"
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Processing...' : (editingBranch ? 'Update Branch' : 'Add Branch')}
-            </button>
+          <div className="flex justify-end space-x-4 mt-6">
             <button
               type="button"
               onClick={() => {
@@ -437,10 +435,16 @@ const ManageEntities = ({
                 setNewBranchNotificationEmails('');
                 setShowAddBranchForm(false);
               }}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+            >
+              Discard
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
               disabled={isLoading}
             >
-              Cancel
+              {isLoading ? 'Processing...' : (editingBranch ? 'Update Branch' : 'Save Branch')}
             </button>
           </div>
         </form>
@@ -449,33 +453,32 @@ const ManageEntities = ({
       <h4 className="text-xl font-semibold text-green-800 mt-8 mb-4">Your Branches</h4>
       {branches.length === 0 && !isLoading && <p className="text-gray-600">No branches found for your company.</p>}
       {branches.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mt-6 border border-gray-200 rounded-lg shadow-md">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-100">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                {/* Removed Clients column */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Branch Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Admin Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Notification Emails</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {branches.map((branch) => (
-                <tr key={branch._id}>
+                <tr key={branch._id} className="hover:bg-gray-50 transition-colors duration-150">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{branch.branchAdmin?.email || 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">{formatEmailsArray(branch.notificationEmails)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditBranch(branch)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      className="text-indigo-600 hover:text-indigo-900 mr-4 font-semibold"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteBranch(branch._id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 hover:text-red-900 font-semibold"
                     >
                       Delete
                     </button>
@@ -490,31 +493,33 @@ const ManageEntities = ({
   );
 
   const renderClientManagement = () => (
-    <div className="mb-8 p-6 bg-purple-50 rounded-lg shadow-inner">
+    <div className="mb-8 p-6 bg-purple-50 rounded-lg shadow-inner border border-purple-200">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="text-xl font-semibold text-purple-800">Clients</h4>
-        <button
-          onClick={() => {
-            setShowAddClientForm(!showAddClientForm);
-            if (!showAddClientForm) {
-              setEditingClient(null);
-              setNewClientEmail('');
-              setNewClientPassword('');
-              setNewCustomerName('');
-              setNewCustomerMobile('');
-              setNewClientNotificationEmails('');
-              setSelectedBranchForClient('');
-            }
-          }}
-          className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200"
-        >
-          {showAddClientForm ? 'Hide Add Client Form' : 'Add New Client'}
-        </button>
+        <h4 className="text-xl font-semibold text-purple-800 flex items-center">
+          Clients
+          {/*<button
+            onClick={() => {
+              setShowAddClientForm(!showAddClientForm);
+              if (!showAddClientForm) {
+                setEditingClient(null);
+                setNewClientEmail('');
+                setNewClientPassword('');
+                setNewCustomerName('');
+                setNewCustomerMobile('');
+                setNewClientNotificationEmails('');
+                setSelectedBranchForClient('');
+              }
+            }}
+            className="ml-4 px-5 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors duration-200 shadow-md transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+          >
+            {editingClient ? 'Edit Client' : 'Create Client'}
+          </button>*/}
+        </h4>
       </div>
 
       {showAddClientForm && (
-        <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-4 rounded-lg bg-white mb-6">
-          <h5 className="text-lg font-semibold text-gray-800">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
+        <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-6 rounded-lg bg-white mb-6 shadow-lg">
+          <h5 className="text-lg font-bold text-gray-800 mb-4">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
           <div>
             <label htmlFor="selectBranchForClient" className="block text-sm font-medium text-gray-700">Assign to Branch (Optional):</label>
             <select
@@ -593,14 +598,7 @@ const ManageEntities = ({
               placeholder="e.g., email1@example.com, email2@example.com"
             ></textarea>
           </div>
-          <div className="flex space-x-2">
-            <button
-              type="submit"
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Add Client')}
-            </button>
+          <div className="flex justify-end space-x-4 mt-6">
             <button
               type="button"
               onClick={() => {
@@ -613,16 +611,22 @@ const ManageEntities = ({
                 setSelectedBranchForClient('');
                 setShowAddClientForm(false);
               }}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
+            >
+              Discard
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
               disabled={isLoading}
             >
-              Cancel
+              {isLoading ? 'Processing...' : (editingClient ? 'Update Client' : 'Save Client')}
             </button>
           </div>
         </form>
       )}
 
-      {/* NEW: Filter for Clients Table */}
+      {/* Filter for Clients Table */}
       <div className="mt-8 mb-4">
         <label htmlFor="filterClientTableByBranch" className="block text-sm font-medium text-gray-700">Filter Clients by Branch:</label>
         <select
@@ -642,21 +646,21 @@ const ManageEntities = ({
       <h4 className="text-xl font-semibold text-purple-800 mt-8 mb-4">Your Clients {filterBranchForClientTable ? `(for ${branches.find(b => b._id === filterBranchForClientTable)?.name})` : '(All)'}</h4>
       {allClients.length === 0 && !isLoading && <p className="text-gray-600">No clients found for your company {filterBranchForClientTable ? `in the selected branch.` : '.'}</p>}
       {allClients.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mt-6 border border-gray-200 rounded-lg shadow-md">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-100">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Mobile</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification Emails</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Client Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Customer Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Customer Mobile</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Branch</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Notification Emails</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {allClients.map((client) => (
-                <tr key={client._id}>
+                <tr key={client._id} className="hover:bg-gray-50 transition-colors duration-150">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerName || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.customerMobile || 'N/A'}</td>
@@ -665,13 +669,13 @@ const ManageEntities = ({
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleEditClient(client)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      className="text-indigo-600 hover:text-indigo-900 mr-4 font-semibold"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteClient(client._id, client.branch?._id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 hover:text-red-900 font-semibold"
                     >
                       Delete
                     </button>
@@ -686,8 +690,42 @@ const ManageEntities = ({
   );
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md">
+    <div className="p-6 bg-gray-50 rounded-lg shadow-md">
       <h3 className="text-2xl font-semibold text-gray-800 mb-4">Manage Branches & Clients</h3>
+
+      {/* Select Entity Type Dropdown */}
+      <div className="mb-6">
+        <label htmlFor="entityTypeSelector" className="block text-lg font-semibold text-gray-800 mb-2">Select Entity Type to Manage:</label>
+        <select
+          id="entityTypeSelector"
+          className="block w-full md:w-1/3 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-base font-medium text-gray-700 bg-white"
+          value={selectedEntityType}
+          onChange={(e) => {
+            setSelectedEntityType(e.target.value);
+            // Reset forms and filters when changing entity type
+            setShowAddBranchForm(false);
+            setEditingBranch(null);
+            setNewBranchName('');
+            setNewBranchAdminEmail('');
+            setNewBranchAdminPassword('');
+            setNewBranchNotificationEmails('');
+
+            setShowAddClientForm(false);
+            setEditingClient(null);
+            setSelectedBranchForClient('');
+            setNewClientEmail('');
+            setNewClientPassword('');
+            setNewCustomerName('');
+            setNewCustomerMobile('');
+            setNewClientNotificationEmails('');
+            setFilterBranchForClientTable(''); // Reset client table filter
+          }}
+        >
+          <option value="">-- Select an Entity Type --</option>
+          <option value="branch">Branches</option>
+          <option value="client">Clients</option>
+        </select>
+      </div>
 
       {isLoading && (
         <div className="text-center text-indigo-600 font-semibold mb-4">Loading...</div>
@@ -705,8 +743,8 @@ const ManageEntities = ({
         </div>
       )}
 
-      {renderBranchManagement()}
-      {renderClientManagement()}
+      {selectedEntityType === 'branch' && renderBranchManagement()}
+      {selectedEntityType === 'client' && renderClientManagement()}
     </div>
   );
 };

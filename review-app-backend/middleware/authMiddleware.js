@@ -33,7 +33,7 @@ const protect = async (req, res, next) => {
       console.error('JWT Verification Error:', error.message);
       // Handle different JWT errors
       if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({ message: 'Not authorized, token expired' });
+        return res.status(401).json({ message: 'Please logout and login again' });
       }
       return res.status(401).json({ message: 'Not authorized, token failed' });
     }

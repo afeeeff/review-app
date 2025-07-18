@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import ManageClients from './ManageClients.jsx';
-import ViewReviews from './ViewReviews.jsx';
-import Statistics from './Statistics.jsx'; // Import the new Statistics component
+import Dashboard from './Dashboard.jsx'; // Now this will be the combined Dashboard
 
 // Main App component for the Branch Admin Interface
 const App = () => {
@@ -14,8 +13,9 @@ const App = () => {
   const [loginError, setLoginError] = useState('');
   // State to store the authenticated user's data (including token, role, companyId, branchId, etc.)
   const [userData, setUserData] = useState(null);
-  // State for managing active tab in the dashboard: 'manage', 'reviews', or 'statistics'
-  const [activeTab, setActiveTab] = useState('manage'); // Default to 'manage'
+  // State for managing active tab in the dashboard: 'dashboard' or 'manage'
+  // Changed default to 'dashboard' as per user request
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // States for managing clients specific to this branch
   const [clients, setClients] = useState([]); // All clients for management tab
@@ -50,7 +50,6 @@ const App = () => {
   // Handle logout
   const handleLogout = useCallback(() => {
     console.log("App.jsx: Logging out user.");
-    localStorage.removeItem('branchAdminToken');
     localStorage.removeItem('branchAdminUserData');
     setUserData(null);
     setCurrentView('login');
@@ -136,6 +135,7 @@ const App = () => {
         if (parsedUserData.role === 'branch_admin' && parsedUserData.companyId && parsedUserData.branchId && parsedUserData.token) {
           setUserData(parsedUserData);
           setCurrentView('dashboard');
+          setActiveTab('dashboard'); // Set active tab to dashboard on successful re-login
         } else {
           // If not a branch_admin token or missing IDs, clear it
           console.warn("App.jsx: Stored user data is invalid or not branch admin, clearing localStorage.");
@@ -187,6 +187,7 @@ const App = () => {
           localStorage.setItem('branchAdminUserData', JSON.stringify(data));
           setUserData(data);
           setCurrentView('dashboard');
+          setActiveTab('dashboard'); // Set active tab to dashboard after successful login
           setLoginError('');
         } else {
           setLoginError('Access Denied: Not a Branch Admin account or missing branch/company association/token.');
@@ -467,36 +468,27 @@ const App = () => {
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-start h-16">
+            {/* Dashboard Tab */}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-6 py-3 text-lg font-semibold ${
+                activeTab === 'dashboard'
+                  ? 'border-b-4 border-purple-600 text-purple-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              } focus:outline-none transition-colors duration-200`}
+            >
+              Dashboard
+            </button>
+            {/* Manage Clients Tab */}
             <button
               onClick={() => setActiveTab('manage')}
-              className={`px-6 py-3 text-lg font-medium ${
+              className={`px-6 py-3 text-lg font-semibold ${
                 activeTab === 'manage'
                   ? 'border-b-4 border-purple-600 text-purple-700'
                   : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
               } focus:outline-none transition-colors duration-200`}
             >
               Manage Clients
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'reviews'
-                  ? 'border-b-4 border-purple-600 text-purple-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              View Reviews
-            </button>
-            {/* NEW: Statistics Tab Button */}
-            <button
-              onClick={() => setActiveTab('statistics')}
-              className={`px-6 py-3 text-lg font-medium ${
-                activeTab === 'statistics'
-                  ? 'border-b-4 border-purple-600 text-purple-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              } focus:outline-none transition-colors duration-200`}
-            >
-              Statistics
             </button>
           </div>
         </div>
@@ -513,6 +505,20 @@ const App = () => {
           <span className="block sm:inline"> {successMessage}</span>
         </div>}
 
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            userData={userData}
+            API_BASE_URL={API_BASE_URL}
+            isLoading={isLoading}
+            error={error}
+            successMessage={successMessage}
+            setIsLoading={setIsLoading}
+            setError={setError}
+            setSuccessMessage={setSuccessMessage}
+            filteredClients={filteredClients} // Pass filtered clients for dropdown
+            fetchClientsForBranchAdminFilters={fetchClientsForBranchAdminFilters} // Pass function to update filtered clients
+          />
+        )}
         {activeTab === 'manage' && (
           <ManageClients
             userData={userData}
@@ -525,34 +531,6 @@ const App = () => {
             setSuccessMessage={setSuccessMessage}
             clients={clients} // Pass all clients for the branch to ManageClients
             fetchAllClientsForBranch={fetchAllClientsForBranch} // Pass function to refresh clients
-          />
-        )}
-        {activeTab === 'reviews' && (
-          <ViewReviews
-            userData={userData}
-            API_BASE_URL={API_BASE_URL}
-            isLoading={isLoading}
-            error={error}
-            successMessage={successMessage}
-            setIsLoading={setIsLoading}
-            setError={setError}
-            setSuccessMessage={setSuccessMessage}
-            filteredClients={filteredClients} // Pass filtered clients for dropdown
-            fetchClientsForBranchAdminFilters={fetchClientsForBranchAdminFilters} // Pass function to update filtered clients
-          />
-        )}
-        {activeTab === 'statistics' && (
-          <Statistics
-            userData={userData}
-            API_BASE_URL={API_BASE_URL}
-            isLoading={isLoading}
-            error={error}
-            successMessage={successMessage}
-            setIsLoading={setIsLoading}
-            setError={setError}
-            setSuccessMessage={setSuccessMessage}
-            filteredClients={filteredClients} // Pass filtered clients for dropdown
-            fetchClientsForBranchAdminFilters={fetchClientsForBranchAdminFilters} // Pass function to update filtered clients
           />
         )}
       </main>

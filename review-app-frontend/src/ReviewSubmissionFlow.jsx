@@ -8,6 +8,7 @@ const ReviewSubmissionFlow = ({
   handleLogout,
   setGlobalSuccessMessage,
   setGlobalError,
+  onFlowStatusChange, // Callback to notify parent about flow status
 }) => {
   // Internal states for the review submission flow
   const [currentStep, setCurrentStep] = useState('invoiceUpload'); // 'invoiceUpload', 'customerReview', 'voiceRecording', 'submissionSuccess'
@@ -38,6 +39,26 @@ const ReviewSubmissionFlow = ({
   const [submissionMessage, setSubmissionMessage] = useState('');
   const [feedbackType, setFeedbackType] = useState(''); // 'positive', 'neutral', 'negative', 'error'
 
+  // Effect to notify parent about the flow status (whether tabs should be hidden)
+  // Tabs should be hidden if we are past the initial invoice upload selection,
+  // or if an invoice is selected and extracted data is present.
+  useEffect(() => {
+    let hideTabs = false;
+    if (currentStep !== 'invoiceUpload') {
+      hideTabs = true;
+    } else if (invoiceFile && extractedInvoiceData) {
+      hideTabs = true;
+    } else if (invoiceFile && isProcessingInvoice) {
+      hideTabs = true; // Hide tabs while processing too
+    }
+
+    // Ensure onFlowStatusChange is a function before calling it
+    if (typeof onFlowStatusChange === 'function') {
+      onFlowStatusChange(hideTabs);
+    }
+  }, [currentStep, invoiceFile, extractedInvoiceData, isProcessingInvoice, onFlowStatusChange]);
+
+
   // Helper function to parse response, handling non-JSON
   const parseResponse = async (response) => {
     const contentType = response.headers.get('content-type');
@@ -55,11 +76,12 @@ const ReviewSubmissionFlow = ({
       if (!allowedTypes.includes(file.type)) {
         setInvoiceProcessingError('Only JPG, PNG, or PDF files are allowed.');
         setInvoiceFile(null);
+        setExtractedInvoiceData(null); // Clear extracted data if file type is wrong
         return;
       }
       setInvoiceFile(file);
       setInvoiceProcessingError('');
-      setExtractedInvoiceData(null);
+      setExtractedInvoiceData(null); // Clear previous extracted data on new file selection
       setUploadedInvoiceFileUrl(null);
     }
   };
@@ -474,12 +496,12 @@ const ReviewSubmissionFlow = ({
   const getRatingEmoji = (rating) => {
     if (rating === 1) return '😡';
     if (rating === 2) return '😠';
-    if (rating === 3) return '😞';
+    if (rating === 3) return '�';
     if (rating === 4) return '😐';
     if (rating === 5) return '😕';
     if (rating === 6) return '🙂';
-    if (rating === 7) return '�';
-    if (rating === 8) return '😊';
+    if (rating === 7) return '😊';
+    if (rating === 8) return '😄';
     if (rating === 9) return '🤩';
     if (rating === 10) return '✨';
     return '';
@@ -488,25 +510,33 @@ const ReviewSubmissionFlow = ({
   // Helper function to render a group of rating buttons
   const renderRatingButtons = (start, end) => {
     return Array.from({ length: end - start + 1 }, (_, i) => start + i).map((rating) => {
-      let bgColor = 'bg-gray-100';
+      let bgColor = 'bg-gray-200'; // Default light button
       let textColor = 'text-gray-800';
-      let ringColor = 'ring-gray-300';
+      let ringColor = 'ring-blue-400';
+      let borderColor = 'border-gray-300';
 
       if (rating <= 3) {
-        bgColor = 'bg-red-200';
+        bgColor = 'bg-red-100';
+        borderColor = 'border-red-300';
         ringColor = 'ring-red-400';
-      } else if (rating <= 7) {
-        bgColor = 'bg-yellow-200';
+        textColor = 'text-red-700';
+      } else if (rating >= 4 && rating <= 7) { // Adjusted range for neutral/passives
+        bgColor = 'bg-yellow-100'; // Lighter yellow for 4-7
+        borderColor = 'border-yellow-300';
         ringColor = 'ring-yellow-400';
-      } else {
-        bgColor = 'bg-green-200';
+        textColor = 'text-yellow-700';
+      } else { // 8-10 (promoters)
+        bgColor = 'bg-green-100';
+        borderColor = 'border-green-300';
         ringColor = 'ring-green-400';
+        textColor = 'text-green-700';
       }
 
       if (customerRating === rating) {
-        bgColor = rating <= 3 ? 'bg-red-600' : rating <= 7 ? 'bg-yellow-600' : 'bg-green-600';
+        bgColor = rating <= 3 ? 'bg-red-500' : (rating >= 4 && rating <= 7) ? 'bg-yellow-500' : 'bg-green-500';
         textColor = 'text-white';
-        ringColor = 'ring-blue-500';
+        ringColor = 'ring-blue-500'; // Active state ring
+        borderColor = 'border-transparent';
       }
 
       return (
@@ -514,16 +544,16 @@ const ReviewSubmissionFlow = ({
           key={rating}
           onClick={() => handleRatingSelect(rating)}
           className={`
-            flex flex-col items-center justify-center w-28 h-28 md:w-24 md:h-24 lg:w-28 lg:h-28
-            rounded-full text-3xl font-bold
-            shadow-xl hover:shadow-2xl transform hover:scale-110
+            flex flex-col items-center justify-center w-32 h-32 md:w-36 md:h-36 lg:w-40 lg:h-40
+            rounded-2xl text-4xl font-bold
+            shadow-lg hover:shadow-xl transform hover:scale-105
             transition-all duration-300 ease-in-out
             ${bgColor} ${textColor}
-            ${customerRating === rating ? `ring-4 ring-offset-2 ${ringColor}` : 'border-2 border-gray-300'}
+            ${customerRating === rating ? `ring-4 ring-offset-2 ring-offset-gray-100 ${ringColor}` : `border ${borderColor}`}
           `}
         >
-          <span className="text-5xl">{getRatingEmoji(rating)}</span>
-          <span className="text-xl font-semibold mt-1">{rating}</span>
+          <span className="text-6xl">{getRatingEmoji(rating)}</span>
+          <span className="text-2xl font-semibold mt-2">{rating}</span>
         </button>
       );
     });
@@ -533,46 +563,46 @@ const ReviewSubmissionFlow = ({
     switch (feedbackType) {
       case 'positive':
         return {
-          bgColor: 'from-green-600 to-emerald-800',
-          textColor: 'text-white',
+          bgColor: 'from-green-200 to-green-50', // Lighter green gradient
+          textColor: 'text-green-800',
           emoji: '✨',
-          messageColor: 'text-green-200',
-          buttonBg: 'bg-green-700 hover:bg-green-800',
+          messageColor: 'text-green-700',
+          buttonBg: 'bg-green-600 hover:bg-green-700',
           title: 'Fantastic Feedback!',
         };
       case 'neutral':
         return {
-          bgColor: 'from-yellow-500 to-orange-700',
-          textColor: 'text-white',
+          bgColor: 'from-amber-200 to-amber-50', // Lighter amber gradient
+          textColor: 'text-amber-800',
           emoji: '👍',
-          messageColor: 'text-yellow-100',
-          buttonBg: 'bg-orange-600 hover:bg-orange-700',
+          messageColor: 'text-amber-700',
+          buttonBg: 'bg-amber-600 hover:bg-amber-700',
           title: 'Feedback Received!',
         };
       case 'negative':
         return {
-          bgColor: 'from-red-600 to-rose-800',
-          textColor: 'text-white',
+          bgColor: 'from-red-200 to-red-50', // Lighter red gradient
+          textColor: 'text-red-800',
           emoji: '😔',
-          messageColor: 'text-red-200',
-          buttonBg: 'bg-rose-700 hover:bg-rose-800',
+          messageColor: 'text-red-700',
+          buttonBg: 'bg-red-600 hover:bg-red-700',
           title: 'We Appreciate Your Honesty!',
         };
       case 'error':
         return {
-          bgColor: 'from-red-700 to-red-900',
-          textColor: 'text-white',
+          bgColor: 'from-gray-200 to-white', // Light for errors
+          textColor: 'text-red-600',
           emoji: '❌',
-          messageColor: 'text-red-300',
-          buttonBg: 'bg-red-800 hover:bg-red-900',
+          messageColor: 'text-red-700',
+          buttonBg: 'bg-gray-500 hover:bg-gray-600',
           title: 'Submission Error!',
         };
       default:
         return {
-          bgColor: 'from-gray-700 to-gray-900',
-          textColor: 'text-white',
+          bgColor: 'from-blue-200 to-blue-50', // Default light blue
+          textColor: 'text-blue-800',
           emoji: '✅',
-          messageColor: 'text-gray-300',
+          messageColor: 'text-blue-700',
           buttonBg: 'bg-blue-600 hover:bg-blue-700',
           title: 'Feedback Submitted!',
         };
@@ -600,42 +630,47 @@ const ReviewSubmissionFlow = ({
     setSubmissionMessage('');
     setFeedbackType('');
     stopRecording(); // Ensure microphone is stopped
+    // When flow resets, ensure parent is notified to show tabs again
+    if (typeof onFlowStatusChange === 'function') {
+      onFlowStatusChange(false);
+    }
   };
 
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-purple-600 p-4">
+    // Removed bg-gray-100 from here to allow App.jsx's background to show through
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       {currentStep === 'invoiceUpload' && (
-        <>
-          <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Upload Invoice for Details</h2>
-          <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all duration-500 hover:scale-105">
+        <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
+          <h2 className="text-5xl font-extrabold text-white text-center mb-10 tracking-tight"> {/* Changed text color here */}
+            Initiate Customer Feedback
+          </h2>
+          <div className="bg-white p-10 rounded-2xl shadow-xl w-full border border-blue-200 transition-all duration-500 transform hover:scale-[1.01]"> {/* Light card */}
             <div className="space-y-6">
               <div>
-                <label htmlFor="invoiceFile" className="block text-base font-medium text-gray-700 mb-2">
+                <label htmlFor="invoiceFile" className="block text-lg font-medium text-gray-700 mb-2">
                   Select Invoice (PDF, JPG, PNG)
                 </label>
                 <input
                   type="file"
                   id="invoiceFile"
                   accept=".pdf, .jpg, .jpeg, .png"
-                  className="mt-1 block w-full text-lg text-gray-900 file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0 file:text-sm file:font-semibold
-                    file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200 bg-gray-50 text-gray-800 placeholder-gray-400"
                   onChange={handleInvoiceFileChange}
                 />
               </div>
               {invoiceProcessingError && (
-                <p className="text-red-600 text-sm font-medium text-center">{invoiceProcessingError}</p>
+                <p className="text-red-600 text-sm font-medium text-center bg-red-100 p-3 rounded-lg border border-red-300">{invoiceProcessingError}</p>
               )}
               {!extractedInvoiceData && (
                 <button
                   onClick={handleProcessInvoice}
                   disabled={!invoiceFile || isProcessingInvoice}
-                  className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-green-600 to-teal-700 hover:from-green-700 hover:to-teal-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition-all duration-300 ease-in-out hover:scale-105"
+                  className="w-full flex items-center justify-center py-3 px-6 border border-transparent rounded-lg shadow-md text-xl font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 ease-in-out transform hover:scale-105"
                 >
                   {isProcessingInvoice ? (
                     <>
-                      <svg className="animate-spin h-5 w-5 text-white mr-3" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-6 w-6 text-white mr-3" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -648,33 +683,39 @@ const ReviewSubmissionFlow = ({
               )}
 
               {extractedInvoiceData && (
-                <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">Extracted Invoice Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
-                    <div className="col-span-1">
-                      <p className="font-semibold text-gray-700">Job Card Number:</p>
+                <div className="mt-8 p-6 bg-blue-50 rounded-xl border border-blue-200 shadow-inner text-gray-800"> {/* Lighter nested card */}
+                  <h3 className="text-2xl font-bold text-blue-700 mb-5 text-center">Review & Confirm Extracted Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-base">
+                    {/* Job Card Number */}
+                    <div className="flex flex-col">
+                      <label htmlFor="jobCardNumber" className="font-semibold text-gray-600 mb-1 text-sm">Job Card Number:</label>
                       <input
                         type="text"
+                        id="jobCardNumber"
                         value={extractedInvoiceData.jobCardNumber || ''}
                         onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, jobCardNumber: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="N/A"
                       />
                     </div>
-                    <div className="col-span-1">
-                      <p className="font-semibold text-gray-700">Invoice Number:</p>
+                    {/* Invoice Number */}
+                    <div className="flex flex-col">
+                      <label htmlFor="invoiceNumber" className="font-semibold text-gray-600 mb-1 text-sm">Invoice Number:</label>
                       <input
                         type="text"
+                        id="invoiceNumber"
                         value={extractedInvoiceData.invoiceNumber || ''}
                         onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="N/A"
                       />
                     </div>
-                    <div className="col-span-1">
-                      <p className="font-semibold text-gray-700">Invoice Date:</p>
+                    {/* Invoice Date */}
+                    <div className="flex flex-col">
+                      <label htmlFor="invoiceDate" className="font-semibold text-gray-600 mb-1 text-sm">Invoice Date (DD/MM/YYYY):</label>
                       <input
                         type="text"
+                        id="invoiceDate"
                         value={extractedInvoiceData.invoiceDate || ''}
                         onChange={(e) => {
                           const newDate = e.target.value;
@@ -684,51 +725,56 @@ const ReviewSubmissionFlow = ({
                         }}
                         pattern="\d{2}/\d{2}/\d{4}"
                         title="Please enter date in DD/MM/YYYY format"
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="N/A"
                       />
                       {invoiceDateError && (
-                        <p className="text-red-600 text-sm font-medium mt-1">{invoiceDateError}</p>
+                        <p className="text-red-600 text-xs font-medium mt-1">{invoiceDateError}</p>
                       )}
-
                     </div>
-                    <div className="col-span-1">
-                      <p className="font-semibold text-gray-700">VIN:</p>
+                    {/* VIN */}
+                    <div className="flex flex-col">
+                      <label htmlFor="vin" className="font-semibold text-gray-600 mb-1 text-sm">VIN:</label>
                       <input
                         type="text"
+                        id="vin"
                         value={extractedInvoiceData.vin || ''}
                         onChange={(e) => setExtractedInvoiceData(prev => ({ ...prev, vin: e.target.value }))}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="N/A"
                       />
                     </div>
-                    <div className="col-span-2">
-                      <p className="font-semibold text-gray-700">Customer Name (from Invoice):</p>
+                    {/* Customer Name */}
+                    <div className="col-span-full flex flex-col">
+                      <label htmlFor="customerName" className="font-semibold text-gray-600 mb-1 text-sm">Customer Name (from Invoice):</label>
                       <input
                         type="text"
+                        id="customerName"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="Enter name if not extracted"
                       />
                     </div>
-                    <div className="col-span-2">
-                      <p className="font-semibold text-gray-700">Customer Mobile (from Invoice):</p>
+                    {/* Customer Mobile */}
+                    <div className="col-span-full flex flex-col">
+                      <label htmlFor="customerMobile" className="font-semibold text-gray-600 mb-1 text-sm">Customer Mobile (from Invoice):</label>
                       <input
                         type="tel"
+                        id="customerMobile"
                         value={customerMobile}
                         onChange={(e) => setCustomerMobile(e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white text-gray-800 placeholder-gray-400"
                         placeholder="Enter mobile if not extracted"
                       />
                     </div>
                     {customerDetailsError && (
-                      <p className="text-red-600 text-sm font-medium col-span-2 text-center">{customerDetailsError}</p>
+                      <p className="text-red-600 text-sm font-medium col-span-full text-center bg-red-100 p-2 rounded-lg border border-red-300">{customerDetailsError}</p>
                     )}
                   </div>
                   <button
                     onClick={handleConfirmDetailsAndProceed}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transform transition-all duration-300 ease-in-out hover:scale-105 mt-6"
+                    className="w-full flex justify-center py-3 px-6 border border-transparent rounded-lg shadow-md text-xl font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 ease-in-out transform hover:scale-105 mt-8"
                   >
                     Confirm Details & Proceed to Review
                   </button>
@@ -736,79 +782,80 @@ const ReviewSubmissionFlow = ({
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {currentStep === 'customerReview' && (
-        <>
-          <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">How was your service?</h2>
+        <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
+          <h2 className="text-5xl font-extrabold text-indigo-800 text-center mb-10 tracking-tight"> {/* Changed text color here */}
+            How was your service experience?
+          </h2>
 
           {customerName && customerMobile && (
-            <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
-              <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
-              <p className="text-2xl font-bold text-blue-700">{customerName}</p>
-              <p className="text-lg text-gray-600">{customerMobile}</p>
+            <div className="bg-white p-6 rounded-xl shadow-lg mb-8 text-center border-t-4 border-blue-500 text-gray-800 w-full max-w-2xl">
+              <p className="text-xl font-semibold text-gray-600">Reviewing for:</p>
+              <p className="text-3xl font-bold text-blue-700 mt-2">{customerName}</p>
+              <p className="text-lg text-gray-700">{customerMobile}</p>
               {extractedInvoiceData && (
-                <div className="mt-4 text-sm text-gray-500">
-                  <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
-                  <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
-                  <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
-                  <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
+                <div className="mt-5 text-sm text-gray-600 space-y-1">
+                  <p>Job Card: <span className="font-medium text-gray-700">{extractedInvoiceData.jobCardNumber || 'N/A'}</span></p>
+                  <p>Invoice No: <span className="font-medium text-gray-700">{extractedInvoiceData.invoiceNumber || 'N/A'}</span></p>
+                  <p>Invoice Date: <span className="font-medium text-gray-700">{extractedInvoiceData.invoiceDate || 'N/A'}</span></p>
+                  <p>VIN: <span className="font-medium text-gray-700">{extractedInvoiceData.vin || 'N/A'}</span></p>
                 </div>
               )}
             </div>
           )}
 
-          <div className="flex flex-col items-center w-full max-w-5xl mb-10">
-            <div className="flex justify-center gap-6 mb-6 w-full">
-              {renderRatingButtons(1, 3)}
+          <div className="flex flex-col items-center w-full max-w-7xl mb-10 space-y-6">
+            <div className="flex justify-center flex-wrap gap-6 w-full">
+              {renderRatingButtons(1, 5)}
             </div>
-            <div className="flex justify-center gap-6 mb-6 w-full">
-              {renderRatingButtons(4, 7)}
-            </div>
-            <div className="flex justify-center gap-6 w-full">
-              {renderRatingButtons(8, 10)}
+            <div className="flex justify-center flex-wrap gap-6 w-full">
+              {renderRatingButtons(6, 10)}
             </div>
           </div>
 
           <button
             onClick={() => setCurrentStep('invoiceUpload')}
-            className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
+            className="mt-8 px-8 py-3 bg-gray-300 text-gray-800 rounded-lg shadow-md hover:bg-gray-400 transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-lg border border-gray-400"
           >
             Back to Invoice Upload
           </button>
-        </>
+        </div>
       )}
 
       {currentStep === 'voiceRecording' && (
-        <>
-          <h2 className="text-5xl font-extrabold text-center text-white mb-10 drop-shadow-md">Record Your Feedback</h2>
+        <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
+          <h2 className="text-5xl font-extrabold text-indigo-800 text-center mb-10 tracking-tight"> {/* Changed text color here */}
+            Share Your Valuable Feedback
+          </h2>
 
           {customerName && customerMobile && (
-            <div className="bg-white p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-500">
-              <p className="text-xl font-semibold text-gray-800">Reviewing for:</p>
-              <p className="text-2xl font-bold text-blue-700">{customerName}</p>
-              <p className="text-lg text-gray-600">{customerMobile}</p>
+            <div className="bg-white p-6 rounded-xl shadow-lg mb-8 text-center border-t-4 border-blue-500 text-gray-800 w-full max-w-2xl">
+              <p className="text-xl font-semibold text-gray-600">Reviewing for:</p>
+              <p className="text-3xl font-bold text-blue-700 mt-2">{customerName}</p>
+              <p className="text-lg text-gray-700">{customerMobile}</p>
               {extractedInvoiceData && (
-                <div className="mt-4 text-sm text-gray-500">
-                  <p>Job Card: {extractedInvoiceData.jobCardNumber || 'N/A'}</p>
-                  <p>Invoice No: {extractedInvoiceData.invoiceNumber || 'N/A'}</p>
-                  <p>Invoice Date: {extractedInvoiceData.invoiceDate || 'N/A'}</p>
-                  <p>VIN: {extractedInvoiceData.vin || 'N/A'}</p>
+                <div className="mt-5 text-sm text-gray-600 space-y-1">
+                  <p>Job Card: <span className="font-medium text-gray-700">{extractedInvoiceData.jobCardNumber || 'N/A'}</span></p>
+                  <p>Invoice No: <span className="font-medium text-gray-700">{extractedInvoiceData.invoiceNumber || 'N/A'}</span></p>
+                  <p>Invoice Date: <span className="font-medium text-gray-700">{extractedInvoiceData.invoiceDate || 'N/A'}</span></p>
+                  <p>VIN: <span className="font-medium text-gray-700">{extractedInvoiceData.vin || 'N/A'}</span></p>
                 </div>
               )}
             </div>
           )}
 
-          <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-lg text-center mb-8 border-t-4 border-purple-500">
-            <label htmlFor="language-select" className="block text-2xl font-semibold text-gray-800 mb-4">
+          <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-3xl text-center mb-8 border border-blue-200 text-gray-800">
+            <label htmlFor="language-select" className="block text-2xl font-semibold text-gray-700 mb-5">
               Select Spoken Language:
             </label>
             <select
               id="language-select"
               value={selectedLanguage}
               onChange={(e) => setSelectedLanguage(e.target.value)}
-              className="block w-full px-4 py-3 text-xl border border-gray-300 rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition duration-200"
+              className="block w-full px-5 py-3 text-xl border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-200 bg-gray-50 text-gray-800 appearance-none cursor-pointer"
             >
               <option value="en-US">English (US)</option>
               <option value="en-IN">English (India)</option>
@@ -820,34 +867,34 @@ const ReviewSubmissionFlow = ({
             </select>
           </div>
 
-          <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-4 border-blue-500">
+          <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-3xl text-center mb-8 border border-blue-200 text-gray-800">
             {isSubmitting ? (
               <div className="flex flex-col items-center justify-center py-8 text-blue-600 text-2xl font-medium">
-                <svg className="animate-spin h-10 w-10 text-blue-500 mb-4" viewBox="0 0 24 24">
+                <svg className="animate-spin h-10 w-10 text-blue-500 mb-5" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <span>Submitting your feedback...</span>
-                <p className="text-lg text-gray-600 mt-2">Please wait, this may take a moment for transcription and translation.</p>
+                <p className="text-lg text-gray-600 mt-3">Please wait, this may take a moment for transcription and analysis.</p>
               </div>
             ) : (
               <>
-                <p className="text-2xl font-semibold text-gray-800 mb-6">Click to record your valuable feedback:</p>
+                <p className="text-2xl font-semibold text-gray-700 mb-6">Click to record your valuable feedback:</p>
                 {recordingError && (
-                  <p className="text-red-600 text-sm mb-4">{recordingError}</p>
+                  <p className="text-red-600 text-sm mb-5 bg-red-100 p-3 rounded-lg border border-red-300">{recordingError}</p>
                 )}
                 <button
                   onClick={handleVoiceRecordSubmit}
                   disabled={isSubmitting}
-                  className={`w-full flex items-center justify-center py-4 px-6 rounded-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-offset-2 transition-all duration-300 ease-in-out text-xl font-bold transform hover:scale-105
-                    ${isRecording ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300' : 'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 focus:ring-green-300'}
+                  className={`w-full flex items-center justify-center py-4 px-6 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 transition-all duration-300 ease-in-out text-2xl font-bold transform hover:scale-105
+                    ${isRecording ? 'bg-red-500 hover:bg-red-600 focus:ring-red-400' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'}
                     text-white`}
                 >
                   {isRecording ? (
                     <>
                       <span className="relative flex h-3 w-3 mr-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-400"></span>
                       </span>
                       Stop Recording
                     </>
@@ -867,33 +914,30 @@ const ReviewSubmissionFlow = ({
           <button
             onClick={() => setCurrentStep('customerReview')}
             disabled={isSubmitting}
-            className="mt-10 px-8 py-4 bg-gray-600 text-white rounded-xl shadow-lg hover:bg-gray-700 transform transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-xl"
+            className="mt-10 px-8 py-3 bg-gray-300 text-gray-800 rounded-lg shadow-md hover:bg-gray-400 transition-all duration-300 ease-in-out hover:scale-105 font-semibold text-lg border border-gray-400"
           >
             Go Back to Rating
           </button>
-        </>
+        </div>
       )}
 
-      {currentStep === 'submissionSuccess' && (() => {
-        const { bgColor, textColor, emoji, messageColor, buttonBg, title } = getSuccessPageStyling();
-        return (
-          <div className={`min-h-screen flex flex-col items-center justify-center bg-gradient-to-br ${bgColor} p-4 text-center`}>
-            <div className={`bg-white bg-opacity-20 backdrop-filter backdrop-blur-lg p-12 rounded-3xl shadow-3xl transform transition-all duration-700 ease-in-out scale-100 animate-fade-in border-t-8 border-b-8 border-opacity-50 ${feedbackType === 'positive' ? 'border-green-300' : feedbackType === 'neutral' ? 'border-yellow-300' : feedbackType === 'negative' ? 'border-red-300' : 'border-gray-300'}`}>
-              <span className={`text-9xl mb-6 block ${textColor} animate-bounce-once`}>{emoji}</span>
-              <h2 className={`text-5xl font-extrabold mb-6 ${textColor} drop-shadow-lg`}>{title}</h2>
-              <p className={`text-2xl font-medium mb-10 ${messageColor} max-w-2xl mx-auto leading-relaxed`}>
-                {submissionMessage}
-              </p>
-              <button
-                onClick={resetFlow} // Reset flow to start new review
-                className={`py-4 px-10 rounded-full text-2xl font-bold text-white shadow-xl transform transition-all duration-300 ease-in-out hover:scale-105 ${buttonBg}`}
-              >
-                Take Another Review
-              </button>
-            </div>
+      {currentStep === 'submissionSuccess' && (
+        <div className={`min-h-screen flex flex-col items-center justify-center bg-gradient-to-br ${getSuccessPageStyling().bgColor} p-8 text-center font-sans`}>
+          <div className={`bg-white bg-opacity-90 backdrop-filter backdrop-blur-lg p-14 rounded-3xl shadow-3xl transform transition-all duration-700 ease-in-out scale-100 animate-fade-in border-t-8 border-b-8 border-opacity-50 ${feedbackType === 'positive' ? 'border-green-500' : feedbackType === 'neutral' ? 'border-amber-500' : feedbackType === 'negative' ? 'border-red-500' : 'border-gray-300'}`}> {/* Light card with border */}
+            <span className={`text-8xl mb-7 block ${getSuccessPageStyling().textColor} animate-bounce-once`}>{getSuccessPageStyling().emoji}</span>
+            <h2 className={`text-5xl font-extrabold mb-7 ${getSuccessPageStyling().textColor} drop-shadow-md`}>{getSuccessPageStyling().title}</h2>
+            <p className={`text-2xl font-medium mb-10 ${getSuccessPageStyling().messageColor} max-w-3xl mx-auto leading-relaxed`}>
+              {submissionMessage}
+            </p>
+            <button
+              onClick={resetFlow}
+              className={`py-4 px-10 rounded-full text-2xl font-bold text-white shadow-xl transition-all duration-300 ease-in-out hover:scale-105 ${getSuccessPageStyling().buttonBg}`}
+            >
+              Take Another Review
+            </button>
           </div>
-        );
-      })()}
+        </div>
+      )}
     </div>
   );
 };

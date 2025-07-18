@@ -4,33 +4,35 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 
-// Clean, professional color palette (bright, no pinks)
+// --- STYLING ---
 const COLORS_PANELS = {
-  tnps: '#1565c0',        // Blue
-  responders: '#607d8b',  // Blue Grey
-  promoters: '#388e3c',   // Green
-  neutral: '#ffb300',     // Amber
-  detractors: '#d32f2f'   // Red
+  tnps: '#1565c0',
+  responders: '#607d8b',
+  promoters: '#388e3c',
+  neutral: '#ffb300',
+  detractors: '#d32f2f'
 };
 const PIE_COLORS = ['#388e3c', '#ffb300', '#d32f2f'];
-
 const FONT_FAMILY = '"Inter", "Segoe UI", "Roboto", Arial, sans-serif';
 
-const Statistics = ({
+const Dashboard = ({
   userData, API_BASE_URL, isLoading, error, successMessage,
   setIsLoading, setError, setSuccessMessage, companies
 }) => {
+  // Filter states
   const [filterCompanyId, setFilterCompanyId] = useState('');
   const [filterBranchId, setFilterBranchId] = useState('');
   const [filterClientId, setFilterClientId] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const [branchesForStatsFilter, setBranchesForStatsFilter] = useState([]);
-  const [clientsForStatsFilter, setClientsForStatsFilter] = useState([]);
+  const [branchesForFilter, setBranchesForFilter] = useState([]);
+  const [clientsForFilter, setClientsForFilter] = useState([]);
+  // Data
   const [reviews, setReviews] = useState([]);
   const [ratingDistributionData, setRatingDistributionData] = useState([]);
   const [feedbackTypeData, setFeedbackTypeData] = useState([]);
   const [averageRating, setAverageRating] = useState(0);
+  // Stats
   const [responders, setResponders] = useState(0);
   const [promoters, setPromoters] = useState({ count: 0, pct: 0 });
   const [detractors, setDetractors] = useState({ count: 0, pct: 0 });
@@ -40,29 +42,29 @@ const Statistics = ({
   // Auth headers
   const getAuthHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${userData?.token}`
+    'Authorization': `Bearer ${userData?.token}`,
   }), [userData?.token]);
 
-  // Fetch dropdown data
-  const fetchClientsAndBranchesForStatsFilters = useCallback(async (companyId, branchId) => {
+  // Fetch dropdown data (branches & clients) based on filters
+  const fetchClientsAndBranchesForFilter = useCallback(async (companyId, branchId) => {
     setError('');
     try {
       if (companyId) {
         const resp = await fetch(`${API_BASE_URL}/superuser/companies/${companyId}/branches`, { headers: getAuthHeaders() });
-        setBranchesForStatsFilter(resp.ok ? await resp.json() : []);
-      } else setBranchesForStatsFilter([]);
+        setBranchesForFilter(resp.ok ? await resp.json() : []);
+      } else setBranchesForFilter([]);
       let clientUrl = `${API_BASE_URL}/superuser/clients`;
       if (branchId) clientUrl = `${API_BASE_URL}/superuser/branches/${branchId}/clients`;
       else if (companyId) clientUrl = `${API_BASE_URL}/superuser/companies/${companyId}/clients`;
       const respC = await fetch(clientUrl, { headers: getAuthHeaders() });
-      setClientsForStatsFilter(respC.ok ? await respC.json() : []);
+      setClientsForFilter(respC.ok ? await respC.json() : []);
     } catch {
       setError('Network error fetching filter data.');
     }
   }, [API_BASE_URL, getAuthHeaders, setError]);
 
-  // Fetch reviews
-  const fetchReviewsForStatistics = useCallback(async () => {
+  // Fetch reviews (filtered)
+  const fetchReviews = useCallback(async () => {
     setIsLoading(true); setError('');
     try {
       let url = `${API_BASE_URL}/superuser/reviews?`;
@@ -73,26 +75,35 @@ const Statistics = ({
       if (filterEndDate) url += `endDate=${filterEndDate}&`;
       const resp = await fetch(url, { headers: getAuthHeaders() });
       setReviews(resp.ok ? await resp.json() : []);
-      if (!resp.ok) setError('Failed to fetch reviews for statistics.');
+      if (!resp.ok) setError('Failed to fetch reviews.');
     } catch {
-      setError('Network error fetching statistics.');
+      setError('Network error fetching reviews.');
       setReviews([]);
     } finally {
       setIsLoading(false);
     }
-  }, [API_BASE_URL, filterCompanyId, filterBranchId, filterClientId, filterStartDate, filterEndDate, getAuthHeaders, setIsLoading, setError]);
+  }, [
+    API_BASE_URL, filterCompanyId, filterBranchId, filterClientId, filterStartDate,
+    filterEndDate, getAuthHeaders, setIsLoading, setError
+  ]);
 
   useEffect(() => {
     if (userData?.token) {
-      fetchReviewsForStatistics();
-      fetchClientsAndBranchesForStatsFilters(filterCompanyId, filterBranchId);
+      fetchReviews();
+      fetchClientsAndBranchesForFilter(filterCompanyId, filterBranchId);
     }
-  }, [filterCompanyId, filterBranchId, filterClientId, filterStartDate, filterEndDate, userData?.token, fetchReviewsForStatistics, fetchClientsAndBranchesForStatsFilters]);
+  }, [
+    filterCompanyId, filterBranchId, filterClientId,
+    filterStartDate, filterEndDate, userData?.token,
+    fetchReviews, fetchClientsAndBranchesForFilter
+  ]);
 
-  // Process stats
+  // Compute stats/charts
   useEffect(() => {
     if (!reviews || reviews.length === 0) {
-      setResponders(0); setPromoters({ count: 0, pct: 0 }); setDetractors({ count: 0, pct: 0 }); setNeutral({ count: 0, pct: 0 }); setTnps(0); setAverageRating(0); setRatingDistributionData([]); setFeedbackTypeData([]); return;
+      setResponders(0); setPromoters({ count: 0, pct: 0 }); setDetractors({ count: 0, pct: 0 });
+      setNeutral({ count: 0, pct: 0 }); setTnps(0); setAverageRating(0);
+      setRatingDistributionData([]); setFeedbackTypeData([]); return;
     }
     const total = reviews.length;
     const promotersCount = reviews.filter(r => r.rating === 9 || r.rating === 10).length;
@@ -114,7 +125,7 @@ const Statistics = ({
     ]);
   }, [reviews]);
 
-  // Panel and chart styles
+  // --- STYLES ---
   const statsPanelStyle = {
     display: "flex", gap: "17px", margin: "32px 0 36px 0", flexWrap: "wrap"
   };
@@ -126,10 +137,8 @@ const Statistics = ({
     boxShadow: "0 2px 10px rgba(60,130,214,0.045)",
     textAlign: "center", padding: "22px 9px 14px 9px",
     borderTop: `5px solid ${color}`,
-    fontFamily: FONT_FAMILY,
-    transition: "transform .18s"
+    fontFamily: FONT_FAMILY
   });
-
   const cardHeading = color => ({
     fontWeight: 800, fontSize: "17.5px", marginBottom: "10px", color,
     letterSpacing: '.2px',
@@ -139,16 +148,17 @@ const Statistics = ({
     fontSize: 33, color, fontWeight: 900, letterSpacing: ".3px"
   });
 
+  // --- RENDER ---
   return (
     <div style={{ maxWidth: "1240px", margin: "0 auto", padding: '38px 2vw', fontFamily: FONT_FAMILY }}>
-      {/* FILTERS */}
+      {/* FILTER PANEL */}
       <div style={{
         background: "#e3f2fd", borderRadius: 13, padding: '18px 15px 12px 15px',
         marginBottom: 18, boxShadow: '0 2px 12px #1976d111', border: "1.4px solid #bbdefb", maxWidth: 1080
       }}>
         <div style={{
           fontWeight: 800, fontSize: 20, marginBottom: 15, color: "#1a237e", letterSpacing: "1.2px"
-        }}>Review Insights Dashboard</div>
+        }}>Dashboard</div>
         <div style={{
           display: "flex", gap: 18, flexWrap: "wrap",
           marginBottom: 4, alignItems: "center"
@@ -172,7 +182,7 @@ const Statistics = ({
             }}
               value={filterBranchId} onChange={e => setFilterBranchId(e.target.value)}>
               <option value="">All Branches</option>
-              {branchesForStatsFilter?.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
+              {branchesForFilter?.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
             </select>
           </div>
           <div>
@@ -183,7 +193,7 @@ const Statistics = ({
             }}
               value={filterClientId} onChange={e => setFilterClientId(e.target.value)}>
               <option value="">All Clients</option>
-              {clientsForStatsFilter?.map(cl => <option key={cl._id} value={cl._id}>{cl.email}</option>)}
+              {clientsForFilter?.map(cl => <option key={cl._id} value={cl._id}>{cl.email}</option>)}
             </select>
           </div>
           <div>
@@ -205,7 +215,7 @@ const Statistics = ({
         </div>
       </div>
 
-      {/* PROFESSIONAL STATS PANEL */}
+      {/* STATISTICS PANEL */}
       <div style={statsPanelStyle}>
         <div style={statCard(COLORS_PANELS.tnps)}>
           <div style={cardHeading(COLORS_PANELS.tnps)}>Service TNPS</div>
@@ -223,27 +233,21 @@ const Statistics = ({
           <div style={cardValue(COLORS_PANELS.promoters)}>
             {promoters.pct}%<sup style={{ fontSize: 15, color: "#252F47", marginLeft: 4 }}>{promoters.count}</sup>
           </div>
-          <div style={{ fontSize: 13, color: '#388e3c', fontWeight: 600 }}>
-            TNPS 9–10
-          </div>
+          <div style={{ fontSize: 13, color: '#388e3c', fontWeight: 600 }}>TNPS 9–10</div>
         </div>
         <div style={statCard(COLORS_PANELS.detractors)}>
           <div style={cardHeading(COLORS_PANELS.detractors)}>Detractors %</div>
           <div style={cardValue(COLORS_PANELS.detractors)}>
             {detractors.pct}%<sup style={{ fontSize: 15, color: "#7f1138", marginLeft: 4 }}>{detractors.count}</sup>
           </div>
-          <div style={{ fontSize: 13, color: '#d32f2f', fontWeight: 600 }}>
-            TNPS 1–6
-          </div>
+          <div style={{ fontSize: 13, color: '#d32f2f', fontWeight: 600 }}>TNPS 1–6</div>
         </div>
         <div style={statCard(COLORS_PANELS.neutral)}>
           <div style={cardHeading(COLORS_PANELS.neutral)}>Passives %</div>
           <div style={cardValue(COLORS_PANELS.neutral)}>
             {neutral.pct}%<sup style={{ fontSize: 15, color: "#178d57", marginLeft: 4 }}>{neutral.count}</sup>
           </div>
-          <div style={{ fontSize: 13, color: '#ffb300', fontWeight: 600 }}>
-            TNPS 7–8
-          </div>
+          <div style={{ fontSize: 13, color: '#ffb300', fontWeight: 600 }}>TNPS 7–8</div>
         </div>
       </div>
 
@@ -256,7 +260,7 @@ const Statistics = ({
         {averageRating}
       </div>
 
-      {/* Charts: Responsive */}
+      {/* CHARTS: Responsive */}
       <div style={{
         display: "flex", gap: 34, alignItems: "stretch",
         flexWrap: "wrap", justifyContent: "space-between", maxWidth: 1140
@@ -336,20 +340,89 @@ const Statistics = ({
           </ResponsiveContainer>
         </div>
       </div>
-      {/* Loading and error messages */}
-      {isLoading && (
+
+      {/* ================= REVIEW TABLE SECTION ================ */}
+      <div style={{
+        margin: "50px 0 30px 0", fontSize: 20, color: "#1565c0",
+        fontWeight: 800, paddingTop: 25
+      }}>All Reviews</div>
+      {(isLoading || (!reviews || reviews.length === 0)) && (
         <div style={{
-          textAlign: 'center', margin: '26px', fontSize: 17,
-          color: COLORS_PANELS.tnps, fontWeight: 700
-        }}>Loading statistics...</div>
-      )}
-      {!isLoading && !error && reviews.length === 0 && (
-        <div style={{
-          textAlign: 'center', margin: "26px 0", color: "#999", fontSize: 16
+          textAlign: 'center', margin: '26px', fontSize: 16,
+          color: COLORS_PANELS.tnps, fontWeight: 600
         }}>
-          No reviews found to generate statistics. Adjust your filters or add some reviews.
+          {isLoading ? 'Loading...' : 'No reviews found to display.'}
         </div>
       )}
+      {!isLoading && reviews.length > 0 && (
+        <div style={{
+          overflowX: 'auto',
+          background: "#fff", borderRadius: 11,
+          boxShadow: "0 2px 18px #1976d111",
+          padding: 16
+        }}>
+          <table style={{
+            minWidth: 1170, borderCollapse: 'collapse', fontFamily: FONT_FAMILY
+          }}>
+            <thead>
+              <tr style={{
+                background: "#e3f2fd", fontWeight: "bold", fontSize: 15, color: "#1976d2"
+              }}>
+                <th style={{ padding: "10px 7px" }}>Rating</th>
+                <th style={{ padding: "10px 7px" }}>Customer Name</th>
+                <th style={{ padding: "10px 7px" }}>Customer Mobile</th>
+                <th style={{ padding: "10px 7px" }}>Client Email</th>
+                <th style={{ padding: "10px 7px" }}>Company</th>
+                <th style={{ padding: "10px 7px" }}>Branch</th>
+                <th style={{ padding: "10px 7px" }}>Review Text</th>
+                <th style={{ padding: "10px 7px" }}>Voice Audio</th>
+                <th style={{ padding: "10px 7px" }}>Invoice Data</th>
+                <th style={{ padding: "10px 7px" }}>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review, i) => (
+                <tr key={review._id || i} style={{ background: i % 2 === 0 ? "#f5fafd" : "#fff" }}>
+                  <td style={{ padding: "7px 5px", fontWeight: 700, color: "#388e3c" }}>{review.rating}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.customerName}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.customerMobile}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.client?.email || 'N/A'}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.company?.name || 'N/A'}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.branch?.name || 'N/A'}</td>
+                  <td style={{ padding: "7px 5px" }}>{review.transcribedText || review.textReview || 'N/A'}</td>
+                  <td style={{ padding: "7px 5px" }}>
+                    {review.voiceData ? (
+                      <audio controls style={{ width: 130 }}>
+                        <source src={review.voiceData} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    ) : 'N/A'}
+                  </td>
+                  <td style={{ padding: "7px 5px", fontSize: 13 }}>
+                    {review.invoiceData ? (
+                      <div style={{ whiteSpace: 'pre-line', lineHeight: 1.4, }}>
+                        {review.invoiceData.jobCardNumber && <>Job Card: {review.invoiceData.jobCardNumber}<br /></>}
+                        {review.invoiceData.invoiceNumber && <>Invoice No: {review.invoiceData.invoiceNumber}<br /></>}
+                        {review.invoiceData.invoiceDate && <>Inv Date: {review.invoiceData.invoiceDate}<br /></>}
+                        {review.invoiceData.vin && <>VIN: {review.invoiceData.vin}<br /></>}
+                        {review.invoiceData.customerNameFromInvoice && <>Cust Name (Inv): {review.invoiceData.customerNameFromInvoice}<br /></>}
+                        {review.invoiceData.customerMobileFromInvoice && <>Cust Mobile (Inv): {review.invoiceData.customerMobileFromInvoice}<br /></>}
+                        {review.invoiceFileUrl &&
+                          (<a href={review.invoiceFileUrl} target='_blank' rel='noopener noreferrer' style={{ color: "#1976d2" }}>View File</a>)}
+                      </div>
+                    ) : 'N/A'}
+                  </td>
+                  <td style={{ padding: "7px 5px" }}>
+                    {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Error below the grid */}
       {error && (
         <div style={{
           color: COLORS_PANELS.detractors, margin: "19px 0", fontWeight: 600, fontSize: 15.5
@@ -359,4 +432,4 @@ const Statistics = ({
   );
 };
 
-export default Statistics;
+export default Dashboard;

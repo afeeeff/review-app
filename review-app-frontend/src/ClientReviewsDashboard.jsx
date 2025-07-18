@@ -106,95 +106,111 @@ const ClientReviewsDashboard = ({ clientId, token, API_BASE_URL, handleLogout })
   };
 
   return (
-    <div className="w-full max-w-6xl bg-white p-8 rounded-2xl shadow-xl border-t-4 border-blue-500 mx-auto">
-      <h3 className="text-3xl font-bold text-center text-gray-800 mb-6">My Reviews</h3>
+    <div className="w-full max-w-7xl bg-gray-900 p-8 rounded-2xl shadow-3xl border border-gray-700 mx-auto font-inter">
+      <h3 className="text-4xl font-bold text-center text-white mb-8">My Reviews</h3>
+
+      {/* Client Details Section */}
+      {clientDetails && (
+        <div className="bg-gray-800 p-6 rounded-xl shadow-md mb-8 text-center border-t-4 border-blue-700 text-gray-100">
+          <p className="text-xl font-semibold text-gray-300">Reviews for:</p>
+          <p className="text-3xl font-bold text-blue-400 mt-1">{clientDetails.email}</p>
+          <p className="text-lg text-gray-400">
+            {clientDetails.companyName && `Company: ${clientDetails.companyName}`}
+            {clientDetails.branchName && ` | Branch: ${clientDetails.branchName}`}
+          </p>
+        </div>
+      )}
 
       {/* Date Filter Section */}
-      <div className="w-full bg-white p-6 rounded-xl shadow-lg mb-8 flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-6 border-t-4 border-teal-500">
+      <div className="w-full bg-gray-800 p-6 rounded-xl shadow-lg mb-8 flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-6 border-t-4 border-teal-700">
         <div className="flex items-center space-x-3 w-full md:w-auto">
-          <label htmlFor="startDate" className="text-gray-700 font-semibold text-lg">From:</label>
+          <label htmlFor="startDate" className="text-gray-300 font-semibold text-lg">From:</label>
           <input
             type="date"
             id="startDate"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+            className="p-3 border border-gray-600 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-gray-900 text-gray-100"
           />
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto">
-          <label htmlFor="endDate" className="text-gray-700 font-semibold text-lg">To:</label>
+          <label htmlFor="endDate" className="text-gray-300 font-semibold text-lg">To:</label>
           <input
             type="date"
             id="endDate"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+            className="p-3 border border-gray-600 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-gray-900 text-gray-100"
           />
         </div>
       </div>
 
       {isLoadingReviews ? (
-        <div className="flex items-center justify-center py-8 text-blue-600 text-xl">
-          <svg className="animate-spin h-8 w-8 text-blue-500 mr-3" viewBox="0 0 24 24">
+        <div className="flex flex-col items-center justify-center py-12 text-blue-400 text-xl">
+          <svg className="animate-spin h-10 w-10 text-blue-400 mb-4" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
           Loading Reviews...
         </div>
       ) : reviewsError ? (
-        <p className="text-red-600 text-center text-lg py-8">{reviewsError}</p>
+        <p className="text-red-400 text-center text-lg py-12 bg-red-900 bg-opacity-30 p-4 rounded-lg border border-red-700">{reviewsError}</p>
       ) : clientReviews.length === 0 ? (
-        <p className="text-gray-600 text-center text-lg py-8">No reviews collected yet for this client matching your criteria.</p>
+        <p className="text-gray-400 text-center text-xl py-12 bg-gray-800 p-4 rounded-lg border border-gray-700">No reviews collected yet for this client matching your criteria.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto rounded-xl shadow-lg border border-gray-700">
+          <table className="min-w-full divide-y divide-gray-700">
+            <thead className="bg-gray-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transcribed Text</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voice Audio</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Rating</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Transcribed Text</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Voice Audio</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Invoice Data</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider">Date</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-gray-900 divide-y divide-gray-800">
               {clientReviews.map((review) => (
-                <tr key={review._id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {review.rating} {getRatingEmoji(review.rating)}
+                <tr key={review._id} className="hover:bg-gray-800 transition-colors duration-200">
+                  <td className="px-6 py-4 text-lg font-medium text-white" data-label="Rating">
+                    {review.rating} <span className="text-2xl">{getRatingEmoji(review.rating)}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {review.customerName} ({review.customerMobile})
+                  <td className="px-6 py-4 text-base text-gray-300" data-label="Customer">
+                    <p className="font-semibold">{review.customerName}</p>
+                    <p className="text-sm text-gray-400">{review.customerMobile}</p>
                   </td>
-                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">
+                  <td className="px-6 py-4 text-base text-gray-300" data-label="Transcribed Text">
                     {review.transcribedText || 'N/A'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 text-base text-gray-300" data-label="Voice Audio">
                     {review.voiceData ? (
-                      <audio controls src={review.voiceData} className="w-24 h-8"></audio>
+                      <audio controls src={review.voiceData} className="w-full max-w-[150px] h-10 rounded-lg"></audio>
                     ) : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-500">
+                  <td className="px-6 py-4 text-base text-gray-300" data-label="Invoice Data">
                     {review.invoiceData ? (
-                      <div className="text-xs">
-                        {review.invoiceData.jobCardNumber && `Job Card: ${review.invoiceData.jobCardNumber}`}<br/>
-                        {review.invoiceData.invoiceNumber && `Invoice No: ${review.invoiceData.invoiceNumber}`}<br/>
-                        {review.invoiceData.invoiceDate && `Invoice Date: ${formatDate(review.invoiceData.invoiceDate)}`}
+                      <div className="text-sm space-y-1">
+                        {review.invoiceData.jobCardNumber && <p><span className="font-semibold">Job Card:</span> {review.invoiceData.jobCardNumber}</p>}
+                        {review.invoiceData.invoiceNumber && <p><span className="font-semibold">Invoice No:</span> {review.invoiceData.invoiceNumber}</p>}
+                        {review.invoiceData.invoiceDate && <p><span className="font-semibold">Inv Date:</span> {formatDate(review.invoiceData.invoiceDate)}</p>}
+                        {review.invoiceData.vin && <p><span className="font-semibold">VIN:</span> {review.invoiceData.vin}</p>}
+                        {review.invoiceData.customerNameFromInvoice && <p><span className="font-semibold">Cust Name (Inv):</span> {review.invoiceData.customerNameFromInvoice}</p>}
+                        {review.invoiceData.customerMobileFromInvoice && <p><span className="font-semibold">Cust Mobile (Inv):</span> {review.invoiceData.customerMobileFromInvoice}</p>}
                         {review.invoiceFileUrl && (
                           <a
                             href={review.invoiceFileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline block mt-1"
+                            className="text-blue-500 hover:underline block mt-2 font-medium"
                           >
-                            View File
+                            View Invoice File
                           </a>
                         )}
                       </div>
                     ) : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 text-base text-gray-300" data-label="Date">
                     {formatDate(review.createdAt)}
                   </td>
                 </tr>

@@ -120,7 +120,7 @@ const Dashboard = ({
     setAverageRating(total ? (sum / total).toFixed(2) : 0);
     setFeedbackTypeData([
       { name: 'Promoters (9–10)', value: promotersCount },
-      { name: 'Neutrals (7–8)', value: neutralCount },
+      { name: 'Neutral (7–8)', value: neutralCount },
       { name: 'Detractors (1–6)', value: detractorsCount }
     ]);
   }, [reviews]);

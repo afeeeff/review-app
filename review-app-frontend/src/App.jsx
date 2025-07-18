@@ -208,7 +208,7 @@ const App = () => {
     <div className="min-h-screen flex flex-col font-sans"> {/* Removed bg-gray-100 here */}
       {/* Header */}
       <header className="bg-white text-gray-800 p-5 shadow-md flex flex-col sm:flex-row justify-between items-center z-10 border-b border-gray-200">
-        <h1 className="text-3xl font-extrabold tracking-tight text-blue-700">Customer Feedback Hub</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-blue-700">Instant Reviews</h1>
         <div className="flex items-center space-x-4">
           <span className="text-base sm:text-lg text-gray-600">Welcome, {userData?.email} ({userData?.branch?.name || 'Client'})</span>
           <button

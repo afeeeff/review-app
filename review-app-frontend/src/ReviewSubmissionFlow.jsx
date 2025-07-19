@@ -642,9 +642,9 @@ const ReviewSubmissionFlow = ({
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       {currentStep === 'invoiceUpload' && (
         <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
-          <h2 className="text-5xl font-extrabold text-orange-500 text-center mb-10 tracking-tight"> {/* Changed text color here */}
-            Initiate Customer Feedback
-          </h2>
+          <h2 className="text-5xl font-extrabold text-blue-500 text-center mb-10 tracking-tight">
+  Initiate Customer Feedback
+</h2>
           <div className="bg-white p-10 rounded-2xl shadow-xl w-full border border-blue-200 transition-all duration-500 transform hover:scale-[1.01]"> {/* Light card */}
             <div className="space-y-6">
               <div>

@@ -3,6 +3,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
+import jsPDF from 'jspdf'; // Import jsPDF
+import 'jspdf-autotable'; // Import jspdf-autotable
 
 // --- STYLING ---
 // Define colors for the statistics panels and charts for a light theme
@@ -14,7 +16,7 @@ const COLORS_PANELS = {
   detractors: '#d32f2f' // Red
 };
 const PIE_COLORS = ['#4CAF50', '#FFC107', '#F44336']; // Green, Amber, Red (for Positive, Neutral, Negative)
-const FONT_FAMILY = '"Inter", "Segoe UI", "Roboto", Arial, sans-serif';
+const FONT_FAMILY = '"Inter", "Inter", "Segoe UI", "Roboto", Arial, sans-serif';
 
 const ClientDashboard = ({
   clientId,
@@ -221,6 +223,107 @@ const ClientDashboard = ({
     return new Date(dateString).toLocaleDateString('en-GB', options);
   };
 
+  // Function to download reviews as Excel (CSV)
+  const downloadReviewsAsExcel = () => {
+    if (reviews.length === 0) {
+      alert("No reviews to download.");
+      return;
+    }
+
+    const headers = [
+      "Customer Name", "Customer Mobile", "VIN", "Job Card Number", "Invoice Number",
+      "Invoice Date", "Transcribed Text", "Date", "Rating", "Feedback Type"
+    ];
+
+    const csvContent = [
+      headers.join(','), // CSV header row
+      ...reviews.map(review => {
+        const customerData = review.customerName || 'N/A';
+        const customerMobile = review.customerMobile || 'N/A';
+        const vin = review.invoiceData?.vin || 'N/A';
+        const jobCardNumber = review.invoiceData?.jobCardNumber || 'N/A';
+        const invoiceNumber = review.invoiceData?.invoiceNumber || 'N/A';
+        const invoiceDate = review.invoiceData?.invoiceDate ? formatDate(review.invoiceData.invoiceDate) : 'N/A';
+        // Handle commas and quotes in transcribed text for CSV
+        const transcribedText = review.transcribedText ? `"${review.transcribedText.replace(/"/g, '""')}"` : 'N/A';
+        const createdAt = review.createdAt ? formatDate(review.createdAt) : 'N/A';
+        const rating = review.rating || 'N/A';
+        const feedbackType = review.feedbackType ? review.feedbackType.charAt(0).toUpperCase() + review.feedbackType.slice(1) : 'N/A';
+
+        return [
+          customerData, customerMobile, vin, jobCardNumber, invoiceNumber,
+          invoiceDate, transcribedText, createdAt, rating, feedbackType
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `client_reviews_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Function to download reviews as PDF
+  const downloadReviewsAsPdf = () => {
+    if (reviews.length === 0) {
+      alert("No reviews to download.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const tableColumn = [
+      "Customer Name", "Mobile", "VIN", "Job Card", "Invoice No",
+      "Inv Date", "Transcribed Text", "Date", "Rating", "Feedback Type"
+    ];
+    const tableRows = [];
+
+    reviews.forEach(review => {
+      const reviewData = [
+        review.customerName || 'N/A',
+        review.customerMobile || 'N/A',
+        review.invoiceData?.vin || 'N/A',
+        review.invoiceData?.jobCardNumber || 'N/A',
+        review.invoiceData?.invoiceNumber || 'N/A',
+        review.invoiceData?.invoiceDate ? formatDate(review.invoiceData.invoiceDate) : 'N/A',
+        review.transcribedText || 'N/A',
+        review.createdAt ? formatDate(review.createdAt) : 'N/A',
+        review.rating || 'N/A',
+        review.feedbackType ? review.feedbackType.charAt(0).toUpperCase() + review.feedbackType.slice(1) : 'N/A'
+      ];
+      tableRows.push(reviewData);
+    });
+
+    // Add a title to the PDF
+    doc.setFontSize(18);
+    doc.text("Client Reviews Dump", 14, 20);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+
+    // Add autoTable to the document
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 25,
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        6: { cellWidth: 50 }, // Adjust width for 'Transcribed Text' column
+      },
+      headStyles: { fillColor: [22, 160, 133], textColor: 255, fontStyle: 'bold' },
+      theme: 'grid',
+    });
+
+    // Save the PDF
+    doc.save(`client_reviews_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
+
   // --- STYLES (Adapted for light theme) ---
   const statsPanelStyle = {
     display: "flex", gap: "17px", margin: "32px 0 36px 0", flexWrap: "wrap"
@@ -245,7 +348,7 @@ const ClientDashboard = ({
   });
 
   return (
-    <div className="w-full max-w-7xl bg-gray-100 p-8 rounded-2xl shadow-lg border border-gray-200 mx-auto font-sans">
+    <div className="w-full p-8 rounded-2xl shadow-lg border border-gray-200 mx-auto font-sans bg-gray-100"> {/* Removed max-w-7xl */}
       <h3 className="text-4xl font-bold text-center text-blue-700 mb-8">My Dashboard</h3>
 
       {/* Client Details Section */}
@@ -449,48 +552,55 @@ const ClientDashboard = ({
           {/* ================= REVIEW TABLE SECTION ================ */}
           <div style={{
             margin: "50px 0 30px 0", fontSize: 20, color: COLORS_PANELS.tnps,
-            fontWeight: 800, paddingTop: 25
-          }}>All Reviews ({reviews.length})</div>
+            fontWeight: 800, paddingTop: 25, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px"
+          }}>
+            Reviews Dump ({reviews.length})
+            <div className="flex gap-3">
+              <button
+                onClick={downloadReviewsAsExcel}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Export
+              </button>
+              {/*<button
+                onClick={downloadReviewsAsPdf}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5 4V2a2 2 0 012-2h6a2 2 0 012 2v2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2v2a2 2 0 01-2 2H7a2 2 0 01-2-2v-2H3a2 2 0 01-2-2V6a2 2 0 012-2h2zm2 0h6V2H7v2zM3 6v8h14V6H3zm8 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+                Download PDF
+              </button>*/}
+            </div>
+          </div>
           {reviews.length > 0 && (
-            <div className="overflow-x-auto rounded-xl shadow-lg border border-gray-200">
+            <div className="overflow-x-auto rounded-xl shadow-lg border border-gray-200 w-full"> {/* Use w-full here */}
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Rating</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Customer</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Customer Data</th> {/* Changed header */}
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Transcribed Text</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Date</th> {/* Moved Date */}
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Rating</th> {/* Moved Rating */}
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Voice Audio</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Invoice Data</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Date</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {reviews.map((review) => (
                     <tr key={review._id} className="hover:bg-gray-50 transition-colors duration-200">
-                      <td className="px-6 py-4 text-lg font-medium text-gray-900" data-label="Rating">
-                        {review.rating} <span className="text-2xl">{getRatingEmoji(review.rating)}</span>
-                      </td>
-                      <td className="px-6 py-4 text-base text-gray-700" data-label="Customer">
-                        <p className="font-semibold">{review.customerName}</p>
-                        <p className="text-sm text-gray-500">{review.customerMobile}</p>
-                      </td>
-                      <td className="px-6 py-4 text-base text-gray-700" data-label="Transcribed Text">
-                        {review.transcribedText || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-base text-gray-700" data-label="Voice Audio">
-                        {review.voiceData ? (
-                          <audio controls src={review.voiceData} className="w-full max-w-[150px] h-10 rounded-lg"></audio>
-                        ) : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 text-base text-gray-700" data-label="Invoice Data">
+                      {/* Customer Data Column */}
+                      <td className="px-6 py-4 text-base text-gray-700" data-label="Customer Data">
+                        <p className="font-semibold">{review.customerName || 'N/A'}</p>
+                        <p className="text-sm text-gray-500">Mobile: {review.customerMobile || 'N/A'}</p>
                         {review.invoiceData ? (
-                          <div className="text-sm space-y-1">
+                          <div className="text-xs mt-2 space-y-1">
+                            {review.invoiceData.vin && <p><span className="font-semibold">VIN:</span> {review.invoiceData.vin}</p>}
                             {review.invoiceData.jobCardNumber && <p><span className="font-semibold">Job Card:</span> {review.invoiceData.jobCardNumber}</p>}
                             {review.invoiceData.invoiceNumber && <p><span className="font-semibold">Invoice No:</span> {review.invoiceData.invoiceNumber}</p>}
                             {review.invoiceData.invoiceDate && <p><span className="font-semibold">Inv Date:</span> {formatDate(review.invoiceData.invoiceDate)}</p>}
-                            {review.invoiceData.vin && <p><span className="font-semibold">VIN:</span> {review.invoiceData.vin}</p>}
-                            {review.invoiceData.customerNameFromInvoice && <p><span className="font-semibold">Cust Name (Inv):</span> {review.invoiceData.customerNameFromInvoice}</p>}
-                            {review.invoiceData.customerMobileFromInvoice && <p><span className="font-semibold">Cust Mobile (Inv):</span> {review.invoiceData.customerMobileFromInvoice}</p>}
                             {review.invoiceFileUrl && (
                               <a
                                 href={review.invoiceFileUrl}
@@ -504,8 +614,23 @@ const ClientDashboard = ({
                           </div>
                         ) : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 text-base text-gray-700" data-label="Date">
-                        {formatDate(review.createdAt)}
+                      {/* Transcribed Text Column */}
+                      <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-700" data-label="Transcribed Text">
+                        {review.transcribedText || 'N/A'}
+                      </td>
+                      {/* Date Column */}
+                      <td className="px-6 py-4 whitespace-nowrap text-base text-gray-700" data-label="Date">
+                        {review.createdAt ? formatDate(review.createdAt) : 'N/A'}
+                      </td>
+                      {/* Rating Column */}
+                      <td className="px-6 py-4 text-lg font-medium text-gray-900" data-label="Rating">
+                        {review.rating} <span className="text-2xl">{getRatingEmoji(review.rating)}</span>
+                      </td>
+                      {/* Voice Audio Column */}
+                      <td className="px-6 py-4 text-base text-gray-700" data-label="Voice Audio">
+                        {review.voiceData ? (
+                          <audio controls src={review.voiceData} className="w-full max-w-[150px] h-10 rounded-lg"></audio>
+                        ) : 'N/A'}
                       </td>
                     </tr>
                   ))}

@@ -137,31 +137,54 @@ exports.sendReviewEmail = async (reviewDetails) => {
  * @param {string} accountDetails.recipientEmail - The email address of the new account admin/user.
  * @param {string} accountDetails.username - The username (email) for login.
  * @param {string} accountDetails.password - The plain text password for initial login.
- * @param {string} accountDetails.role - The role of the created account (e.g., 'Company Admin', 'Branch Admin', 'Client').
+ * @param {string} accountDetails.role - The role of the created account (e.g., 'company_admin', 'branch_admin', 'client').
  * @param {string} accountDetails.loginLink - The specific login URL for their role.
+ * @param {string} [accountDetails.name] - Optional. The name of the company, branch, or client for personalization.
  */
 exports.sendAccountCreationEmail = async (accountDetails) => {
-  const { recipientEmail, username, password, role, loginLink } = accountDetails;
+  const { recipientEmail, username, password, role, loginLink, name } = accountDetails;
+
+  let subjectLine = '';
+  let greetingName = name || username; // Use provided name, fallback to username
+  let accessType = ''; // Used for the main heading
+
+  switch (role) {
+    case 'company_admin':
+      subjectLine = 'Your Dealer Access is created';
+      accessType = 'Dealer Access (Company)';
+      break;
+    case 'branch_admin':
+      subjectLine = 'Your Branch Access is created';
+      accessType = 'Branch Access';
+      break;
+    case 'client':
+      subjectLine = 'Your User Access is created';
+      accessType = 'User Access';
+      break;
+    default:
+      subjectLine = 'Your Account is created';
+      accessType = 'Account';
+  }
 
   const emailHtml = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="color: #28a745;">Your ${role} Account Has Been Created!</h2>
-      <p>Dear ${username},</p>
-      <p>Your account for the Customer Review App has been successfully created. You can now log in using the following credentials:</p>
-      <ul>
-        <li><strong>Username (Email):</strong> ${username}</li>
-        <li><strong>Password:</strong> ${password}</li>
+    <div style="font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05);">
+      <h2 style="color: #1a237e; text-align: center; margin-bottom: 20px;">Your ${accessType} is created</h2>
+      <p style="font-size: 16px; color: #555;">Hi <strong style="color: #007bff;">${greetingName}</strong>,</p>
+      <p style="font-size: 16px; color: #555;">You can now log in using the following credentials:</p>
+      <ul style="list-style-type: none; padding: 0; margin: 20px 0; background-color: #f9f9f9; border-left: 4px solid #007bff; padding: 15px; border-radius: 4px;">
+        <li style="margin-bottom: 10px; font-size: 15px;"><strong>Username:</strong> <span style="color: #333; word-break: break-all;">${username}</span></li>
+        <li style="font-size: 15px;"><strong>Password:</strong> <span style="color: #333; word-break: break-all;">${password}</span></li>
       </ul>
-      <p>Please use the link below to log in to your dashboard:</p>
-      <p style="margin-top: 20px;">
-        <a href="https://${loginLink}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold;">
-          Login to Your Dashboard
+      <p style="font-size: 16px; color: #555;">Please use the link below to log in to your dashboard:</p>
+      <p style="margin-top: 25px; text-align: center;">
+        <a href="https://${loginLink}" target="_blank" style="display: inline-block; padding: 12px 25px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; box-shadow: 0 2px 5px rgba(0,123,255,0.2);">
+          Click here for login
         </a>
       </p>
-      <p style="margin-top: 20px; font-size: 0.9em; color: #777;">
+      <p style="margin-top: 30px; font-size: 0.9em; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
         For security reasons, we recommend changing your password after your first login.
       </p>
-      <p style="margin-top: 20px; font-size: 0.9em; color: #777;">
+      <p style="margin-top: 10px; font-size: 0.85em; color: #999; text-align: center;">
         This is an automated email, please do not reply.
       </p>
     </div>
@@ -170,7 +193,7 @@ exports.sendAccountCreationEmail = async (accountDetails) => {
   const mailOptions = {
     from: process.env.SENDER_EMAIL || 'noreply@yourcompany.com',
     to: recipientEmail,
-    subject: `Welcome! Your ${role} Account Details for InstantReviews`,
+    subject: subjectLine,
     html: emailHtml,
   };
 

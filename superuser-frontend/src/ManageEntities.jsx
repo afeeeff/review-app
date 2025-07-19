@@ -632,7 +632,7 @@ const ManageEntities = ({
         <form onSubmit={editingCompany ? handleUpdateCompany : handleCreateCompany} className="space-y-4 border p-6 rounded-lg bg-white mb-6 shadow-lg">
           <h5 className="text-lg font-bold text-gray-800 mb-4">{editingCompany ? 'Edit Company Details' : 'Create New Company'}</h5>
           <div>
-            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name:</label>
+            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Dealership Name:</label>
             <input
               type="text"
               id="companyName"
@@ -643,7 +643,7 @@ const ManageEntities = ({
             />
           </div>
           <div>
-            <label htmlFor="companyAdminEmail" className="block text-sm font-medium text-gray-700">Admin Email:</label>
+            <label htmlFor="companyAdminEmail" className="block text-sm font-medium text-gray-700">Dealer Email:</label>
             <input
               type="email"
               id="companyAdminEmail"
@@ -654,7 +654,7 @@ const ManageEntities = ({
             />
           </div>
           <div>
-            <label htmlFor="companyAdminPassword" className="block text-sm font-medium text-gray-700">Admin Password: {editingCompany ? '(Leave blank to keep current)(min length:6 characters)' : ''}</label>
+            <label htmlFor="companyAdminPassword" className="block text-sm font-medium text-gray-700">Dealer Password: {editingCompany ? '(Leave blank to keep current)(min length:6 characters)' : ''}</label>
             <input
               type="password"
               id="companyAdminPassword"
@@ -666,7 +666,7 @@ const ManageEntities = ({
           </div>
           {/* Notification Emails Input */}
           <div>
-            <label htmlFor="companyNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails (comma-separated):</label>
+            <label htmlFor="companyNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails </label>
             <input
               type="text"
               id="companyNotificationEmails"
@@ -934,7 +934,7 @@ const ManageEntities = ({
         <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4 border p-6 rounded-lg bg-white mb-6 shadow-lg">
           <h5 className="text-lg font-bold text-gray-800 mb-4">{editingClient ? 'Edit Client Details' : 'Create New Client'}</h5>
           <div>
-            <label htmlFor="selectCompanyForClientForm" className="block text-sm font-medium text-gray-700">Select Company (Optional):</label>
+            <label htmlFor="selectCompanyForClientForm" className="block text-sm font-medium text-gray-700">Select Company </label>
             <select
               id="selectCompanyForClientForm"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -968,7 +968,7 @@ const ManageEntities = ({
             </div>
           )}
           <div>
-            <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">Client Email:</label>
+            <label htmlFor="clientEmail" className="block text-sm font-medium text-gray-700">User Email:</label>
             <input
               type="email"
               id="clientEmail"
@@ -979,7 +979,7 @@ const ManageEntities = ({
             />
           </div>
           <div>
-            <label htmlFor="clientPassword" className="block text-sm font-medium text-gray-700">Client Password: {editingClient ? '(Leave blank to keep current)' : ''}</label>
+            <label htmlFor="clientPassword" className="block text-sm font-medium text-gray-700">User Password: {editingClient ? '(Leave blank to keep current)' : ''}</label>
             <input
               type="password"
               id="clientPassword"
@@ -990,7 +990,7 @@ const ManageEntities = ({
             />
           </div>
           <div>
-            <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">Customer Name:</label>
+            <label htmlFor="customerName" className="block text-sm font-medium text-gray-700">User Name:</label>
             <input
               type="text"
               id="customerName"
@@ -1001,7 +1001,7 @@ const ManageEntities = ({
             />
           </div>
           <div>
-            <label htmlFor="customerMobile" className="block text-sm font-medium text-gray-700">Customer Mobile:</label>
+            <label htmlFor="customerMobile" className="block text-sm font-medium text-gray-700">User Mobile:</label>
             <input
               type="text"
               id="customerMobile"
@@ -1013,7 +1013,7 @@ const ManageEntities = ({
           </div>
           {/* Notification Emails Input */}
           <div>
-            <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails (comma-separated):</label>
+            <label htmlFor="clientNotificationEmails" className="block text-sm font-medium text-gray-700">Notification Emails :</label>
             <input
               type="text"
               id="clientNotificationEmails"

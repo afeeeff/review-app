@@ -4,7 +4,7 @@ import ClientDashboard from './ClientDashboard.jsx'; // New combined dashboard c
 
 // Main App component
 const App = () => {
-  // State to manage the current top-level view: 'login' or 'dashboard'
+  // State to manage the current top-level view: 'login', 'startReview', 'dashboard'
   const [currentView, setCurrentView] = useState('login');
   // State for login form inputs
   const [username, setUsername] = useState('');
@@ -15,7 +15,7 @@ const App = () => {
   // State to store the logged-in client's ID and full user data
   const [clientId, setClientId] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('jwtToken'));
-  const [userData, setUserData] = useState(null); // Includes email, role, companyId, branchId
+  const [userData, setUserData] = useState(null); // Includes email, role, companyId, branchId, customerName, customerMobile
 
   // State for managing active tab within the dashboard: 'takeReview' or 'dashboard'
   const [activeDashboardTab, setActiveDashboardTab] = useState('takeReview'); // Default to 'takeReview'
@@ -23,10 +23,24 @@ const App = () => {
   // State to control visibility of 'Dashboard' tab during review submission flow
   const [hideDashboardTabs, setHideDashboardTabs] = useState(false);
 
+  // State for profile dropdown visibility
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  // State for profile modal visibility and type ('view' or 'changePassword')
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalType, setProfileModalType] = useState('view'); // 'view' or 'changePassword'
+
+  // States for Change Password form
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+
+
   // Global states for loading, error, and success messages (for general dashboard feedback)
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccess] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Base URL for your backend API
   const API_BASE_URL =
@@ -47,8 +61,10 @@ const App = () => {
     setPassword('');
     setLoginError('');
     setError('');
-    setSuccess('');
+    setSuccessMessage('');
     setHideDashboardTabs(false); // Reset tab visibility on logout
+    setShowProfileDropdown(false); // Hide dropdown on logout
+    setShowProfileModal(false); // Hide modal on logout
   }, []);
 
   // Callback from ReviewSubmissionFlow to update tab visibility
@@ -68,7 +84,7 @@ const App = () => {
           setClientId(parsedUserData.clientId);
           setToken(storedToken);
           setUserData(parsedUserData);
-          setCurrentView('dashboard');
+          setCurrentView('startReview'); // Go to startReview screen after successful auto-login
         } else {
           console.warn("App.jsx: Stored user data is invalid or not a client, clearing localStorage.");
           localStorage.removeItem('jwtToken');
@@ -122,7 +138,7 @@ const App = () => {
           setClientId(data._id);
           setToken(data.token);
           setUserData({ ...data, clientId: data._id });
-          setCurrentView('dashboard');
+          setCurrentView('startReview'); // Go to startReview screen after successful login
           setLoginError('');
         } else {
           setLoginError('Access Denied: Not a Client account or missing required data.');
@@ -147,6 +163,70 @@ const App = () => {
       setIsLoading(false);
     }
   };
+
+  // Function to get initials for profile icon
+  const getInitials = (name, email) => {
+    if (name) {
+      const parts = name.split(' ');
+      if (parts.length > 1) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return parts[0][0].toUpperCase();
+    }
+    if (email) {
+      return email[0].toUpperCase();
+    }
+    return '?';
+  };
+
+  // Handle dummy password change
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordChangeMessage('');
+    setPasswordChangeError('');
+    setIsLoading(true); // Set loading for the password change request
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError('New passwords do not match.');
+      setIsLoading(false);
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordChangeError('New password must be at least 6 characters long.');
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // Send the user's token
+        },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+
+      const data = await parseResponse(response);
+
+      if (response.ok) {
+        setPasswordChangeMessage(data.message || 'Password changed successfully!');
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        // Optionally close modal after a short delay
+        setTimeout(() => setShowProfileModal(false), 1500);
+      } else {
+        setPasswordChangeError(data.message || 'Failed to change password. Please check your old password.');
+      }
+    } catch (error) {
+      console.error('Change password API error:', error);
+      setPasswordChangeError('Network error or server unavailable. Failed to change password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   // Render the login view
   const renderLogin = () => (
@@ -203,20 +283,76 @@ const App = () => {
     </div>
   );
 
+  // Render the "Start Taking Review" screen
+  const renderStartReviewScreen = () => (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
+      <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-lg text-center border border-blue-200">
+        <h2 className="text-4xl font-extrabold text-blue-700 mb-6">Welcome, {userData?.customerName || userData?.email}!</h2>
+        <p className="text-lg text-gray-700 mb-8">Ready to provide feedback on your recent service experience?</p>
+        <button
+          onClick={() => setCurrentView('dashboard')} // Transition to the dashboard view
+          className="py-3 px-8 bg-blue-600 text-white font-bold text-xl rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 ease-in-out transform hover:scale-105"
+        >
+          Start Taking Review
+        </button>
+      </div>
+    </div>
+  );
+
+
   // Render the main dashboard view
   const renderDashboard = () => (
     <div className="min-h-screen flex flex-col font-sans"> {/* Removed bg-gray-100 here */}
       {/* Header */}
       <header className="bg-white text-gray-800 p-5 shadow-md flex flex-col sm:flex-row justify-between items-center z-10 border-b border-gray-200">
         <h1 className="text-3xl font-extrabold tracking-tight text-blue-700">Instant Reviews</h1>
-        <div className="flex items-center space-x-4">
-          <span className="text-base sm:text-lg text-gray-600">Welcome, {userData?.email} ({userData?.branch?.name || 'Client'})</span>
+        <div className="relative"> {/* Added relative for dropdown positioning */}
           <button
-            onClick={handleLogout}
-            className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-lg font-semibold"
+            onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+            className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-500 text-white text-xl font-bold uppercase shadow-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            title={userData?.customerName || userData?.email}
           >
-            Logout
+            {getInitials(userData?.customerName, userData?.email)}
           </button>
+          {showProfileDropdown && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+              <div className="block px-4 py-2 text-sm text-gray-700 border-b border-gray-200 font-semibold">
+                {userData?.customerName || userData?.email}
+              </div>
+              <button
+                onClick={() => {
+                  setProfileModalType('view');
+                  setShowProfileModal(true);
+                  setShowProfileDropdown(false);
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                View Profile
+              </button>
+              <button
+                onClick={() => {
+                  setProfileModalType('changePassword');
+                  setShowProfileModal(true);
+                  setShowProfileDropdown(false);
+                  // Clear password fields and messages when opening
+                  setOldPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                  setPasswordChangeMessage('');
+                  setPasswordChangeError('');
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Change Password
+              </button>
+              <button
+                onClick={handleLogout}
+                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -271,7 +407,7 @@ const App = () => {
             token={token}
             clientId={clientId}
             handleLogout={handleLogout}
-            setGlobalSuccessMessage={setSuccess}
+            setGlobalSuccessMessage={setSuccessMessage}
             setGlobalError={setError}
             onFlowStatusChange={handleReviewFlowStatusChange} // Pass the callback
           />
@@ -285,21 +421,95 @@ const App = () => {
             handleLogout={handleLogout}
             setIsLoading={setIsLoading}
             setError={setError}
-            setSuccessMessage={setSuccess}
+            setSuccessMessage={setSuccessMessage}
             isLoading={isLoading}
             error={error}
             successMessage={successMessage}
           />
         )}
       </main>
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            >
+              &times;
+            </button>
+            {profileModalType === 'view' && (
+              <>
+                <h3 className="text-2xl font-bold text-blue-700 mb-6 text-center">Your Profile</h3>
+                <div className="space-y-4 text-lg text-gray-700">
+                  <p><span className="font-semibold">Name:</span> {userData?.customerName || 'N/A'}</p>
+                  <p><span className="font-semibold">Email:</span> {userData?.email || 'N/A'}</p>
+                  <p><span className="font-semibold">Mobile:</span> {userData?.customerMobile || 'N/A'}</p>
+                  {userData?.company?.name && <p><span className="font-semibold">Company:</span> {userData.company.name}</p>}
+                  {userData?.branch?.name && <p><span className="font-semibold">Branch:</span> {userData.branch.name}</p>}
+                </div>
+              </>
+            )}
+
+            {profileModalType === 'changePassword' && (
+              <>
+                <h3 className="text-2xl font-bold text-blue-700 mb-6 text-center">Change Password</h3>
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div>
+                    <label htmlFor="oldPassword" className="block text-sm font-medium text-gray-700 mb-1">Old Password:</label>
+                    <input
+                      type="password"
+                      id="oldPassword"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">New Password:</label>
+                    <input
+                      type="password"
+                      id="newPassword"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="confirmNewPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password:</label>
+                    <input
+                      type="password"
+                      id="confirmNewPassword"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  {passwordChangeError && <p className="text-red-600 text-sm text-center">{passwordChangeError}</p>}
+                  {passwordChangeMessage && <p className="text-green-600 text-sm text-center">{passwordChangeMessage}</p>}
+                  <button
+                    type="submit"
+                    className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    disabled={isLoading} // Disable button during loading
+                  >
+                    {isLoading ? 'Changing...' : 'Change Password'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <Fragment>
       {/* Tailwind CSS CDN and Inter font link are expected to be in index.html */}
-      {/* If they are not in index.html, you might need to add them here or in a global CSS file */}
-
       {/* Main container for the entire application with background styles */}
       <div
         className="min-h-screen w-full"
@@ -315,6 +525,8 @@ const App = () => {
           switch (currentView) {
             case 'login':
               return renderLogin();
+            case 'startReview': // New case for the start review screen
+              return renderStartReviewScreen();
             case 'dashboard':
               return renderDashboard();
             default:

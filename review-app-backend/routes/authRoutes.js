@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User'); // Import the new User model
 const bcrypt = require('bcryptjs');
 const authController = require('../controllers/authController'); // Import authController
+const { protect } = require('../middleware/authMiddleware'); // Import protect middleware
 
 // Helper function to generate JWT
 // Now includes role, companyId, and branchId in the token payload
@@ -77,6 +78,11 @@ router.post('/request-password-reset-otp', authController.requestPasswordResetOT
 // @route   POST /api/auth/reset-password-with-otp
 // @access  Public
 router.post('/reset-password-with-otp', authController.resetPasswordWithOTP);
+
+// @desc    Change user password (requires authentication)
+// @route   PUT /api/auth/change-password
+// @access  Private
+router.put('/change-password', protect, authController.changePassword);
 
 
 module.exports = router;

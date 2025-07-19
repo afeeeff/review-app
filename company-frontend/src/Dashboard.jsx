@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend // Ensure all necessary Recharts components are imported
 } from 'recharts';
 
-// --- STYLING ---
+// --- STYLING (Moved outside the component for better scope management) ---
 const COLORS_PANELS = {
   tnps: '#1565c0',
   responders: '#607d8b',
@@ -12,8 +12,31 @@ const COLORS_PANELS = {
   neutral: '#ffb300',
   detractors: '#d32f2f'
 };
-const PIE_COLORS = ['#388e3c', '#ffb300', '#d32f2f']; // Green, Amber, Red (for Promoters, Neutral, Detractors)
+// Updated PIE_COLORS to match Promoters, Neutral, Detractors directly
+const PIE_COLORS = ['#388e3c', '#ffb300', '#d32f2f']; // Green, Amber, Red
 const FONT_FAMILY = '"Inter", "Segoe UI", "Roboto", Arial, sans-serif';
+
+const statsPanelStyle = {
+  display: "flex", gap: "17px", margin: "32px 0 36px 0", flexWrap: "wrap"
+};
+const statCard = color => ({
+  flex: '1 1 190px',
+  minWidth: 190,
+  background: "#ffffff", // White background for Company Admin Dashboard cards
+  borderRadius: "14px",
+  boxShadow: "0 2px 10px rgba(60,130,214,0.045)",
+  textAlign: "center", padding: "22px 9px 14px 9px",
+  borderTop: `5px solid ${color}`,
+  fontFamily: FONT_FAMILY
+});
+const cardHeading = color => ({
+  fontWeight: 800, fontSize: "17.5px", marginBottom: "10px", color,
+  letterSpacing: '.2px',
+  fontFamily: FONT_FAMILY
+});
+const cardValue = color => ({
+  fontSize: 33, color, fontWeight: 900, letterSpacing: ".3px"
+});
 
 const Dashboard = ({
   userData, API_BASE_URL, isLoading, error, successMessage,
@@ -48,6 +71,28 @@ const Dashboard = ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${userData?.token}`,
   }), [userData?.token]);
+
+  // Helper function to format date to DD/MM/YYYY
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('en-GB', options);
+  };
+
+  // Function to get appropriate emoji for rating buttons (for table display)
+  const getRatingEmoji = (rating) => {
+    if (rating === 1) return '😡';
+    if (rating === 2) return '😠';
+    if (rating === 3) return '😞';
+    if (rating === 4) return '😐';
+    if (rating === 5) return '😕';
+    if (rating === 6) return '🙂';
+    if (rating === 7) return '😊';
+    if (rating === 8) return '😄';
+    if (rating === 9) return '🤩';
+    if (rating === 10) return '✨';
+    return '';
+  };
 
   // Fetch reviews (filtered) for the company admin scope
   const fetchCompanyReviews = useCallback(async () => {
@@ -136,22 +181,12 @@ const Dashboard = ({
     setRatingDistributionData(processedRatingData);
     setAverageRating(total ? (totalRatingSum / total).toFixed(2) : 0);
 
-    // Calculate Feedback Type Distribution (Pie Chart)
-    const feedbackCounts = {
-      positive: 0,
-      neutral: 0,
-      negative: 0,
-    };
-    reviews.forEach(review => {
-      if (review.feedbackType && ['positive', 'neutral', 'negative'].includes(review.feedbackType)) {
-        feedbackCounts[review.feedbackType] = (feedbackCounts[review.feedbackType] || 0) + 1;
-      }
-    });
-
-    const processedFeedbackTypeData = Object.keys(feedbackCounts).map(type => ({
-      name: type.charAt(0).toUpperCase() + type.slice(1), // Capitalize first letter
-      value: feedbackCounts[type],
-    })).filter(item => item.value > 0); // Only include types with reviews
+    // Calculate Feedback Type Distribution (Pie Chart) - Using Promoters, Neutral, Detractors
+    const processedFeedbackTypeData = [
+      { name: 'Promoters', value: promotersCount },
+      { name: 'Neutral', value: neutralCount },
+      { name: 'Detractors', value: detractorsCount },
+    ].filter(item => item.value > 0); // Only include types with reviews
     setFeedbackTypeData(processedFeedbackTypeData);
 
     // Calculate Reviews Over Time (Line Chart)
@@ -171,34 +206,64 @@ const Dashboard = ({
 
   }, [reviews]);
 
+  // Function to export reviews as Excel (CSV)
+  const exportReviewsAsExcel = () => {
+    if (reviews.length === 0) {
+      alert("No reviews to export.");
+      return;
+    }
 
-  // --- STYLES (from Superuser Dashboard) ---
-  const statsPanelStyle = {
-    display: "flex", gap: "17px", margin: "32px 0 36px 0", flexWrap: "wrap"
+    const headers = [
+      "Customer Name", "Customer Mobile", "VIN", "Job Card Number", "Invoice Number",
+      "Invoice Date", "Transcribed Text", "Date", "Rating", "Feedback Type",
+      "Company Name", "Branch Name", "Client Email" // Added company, branch, client details
+    ];
+
+    const csvContent = [
+      headers.join(','), // CSV header row
+      ...reviews.map(review => {
+        const customerData = review.customerName || 'N/A';
+        const customerMobile = review.customerMobile || 'N/A';
+        const vin = review.invoiceData?.vin || 'N/A';
+        const jobCardNumber = review.invoiceData?.jobCardNumber || 'N/A';
+        const invoiceNumber = review.invoiceData?.invoiceNumber || 'N/A';
+        const invoiceDate = review.invoiceData?.invoiceDate ? formatDate(review.invoiceData.invoiceDate) : 'N/A';
+        // Handle commas and quotes in transcribed text for CSV
+        const transcribedText = review.transcribedText ? `"${review.transcribedText.replace(/"/g, '""')}"` : 'N/A';
+        const createdAt = review.createdAt ? formatDate(review.createdAt) : 'N/A';
+        const rating = review.rating || 'N/A';
+        const feedbackType = review.feedbackType ? review.feedbackType.charAt(0).toUpperCase() + review.feedbackType.slice(1) : 'N/A';
+        const companyName = review.company?.name || 'N/A';
+        const branchName = review.branch?.name || 'N/A';
+        const clientEmail = review.client?.email || 'N/A';
+
+
+        return [
+          customerData, customerMobile, vin, jobCardNumber, invoiceNumber,
+          invoiceDate, transcribedText, createdAt, rating, feedbackType,
+          companyName, branchName, clientEmail
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `company_reviews_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
-  const statCard = color => ({
-    flex: '1 1 190px',
-    minWidth: 190,
-    background: "#f7fafc",
-    borderRadius: "14px",
-    boxShadow: "0 2px 10px rgba(60,130,214,0.045)",
-    textAlign: "center", padding: "22px 9px 14px 9px",
-    borderTop: `5px solid ${color}`,
-    fontFamily: FONT_FAMILY
-  });
-  const cardHeading = color => ({
-    fontWeight: 800, fontSize: "17.5px", marginBottom: "10px", color,
-    letterSpacing: '.2px',
-    fontFamily: FONT_FAMILY
-  });
-  const cardValue = color => ({
-    fontSize: 33, color, fontWeight: 900, letterSpacing: ".3px"
-  });
 
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* FILTER PANEL (Similar to Superuser Dashboard) */}
+    // The outermost div should have a solid background to ensure visibility
+    <div className="w-full px-8 py-10 font-sans bg-white">
+      {/* FILTER PANEL */}
       <div style={{
         background: "#e3f2fd", borderRadius: 13, padding: '18px 15px 12px 15px',
         marginBottom: 18, boxShadow: '0 2px 12px #1976d111', border: "1.4px solid #bbdefb", maxWidth: '100%'
@@ -340,40 +405,39 @@ const Dashboard = ({
                 data={feedbackTypeData}
                 cx="50%" cy="50%"
                 labelLine={false}
+                outerRadius={80} // Adjusted outerRadius to give more space for labels
+                fill="#8884d8"
+                dataKey="value"
+                // Custom label rendering function
                 label={({ name, value, percent, cx, cy, midAngle, outerRadius }) => {
                   const RADIAN = Math.PI / 180;
-                  const radius = outerRadius + 20;
+                  const radius = outerRadius + 20; // Distance of the label from the center
                   const x = cx + radius * Math.cos(-midAngle * RADIAN);
                   const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
                   return (
                     <text
                       x={x}
                       y={y}
-                      fill="#283593"
+                      fill="#283593" // Darker text for visibility
                       textAnchor={x > cx ? "start" : "end"}
                       dominantBaseline="central"
                       style={{
                         fontWeight: 600,
-                        fontSize: 14.8,
-                        textShadow: "0 2px 8px #fff",
-                        paintOrder: "stroke",
-                        stroke: "#fff",
-                        strokeWidth: 3
+                        fontSize: 12, // Slightly smaller font size
+                        textShadow: "0 1px 2px rgba(0,0,0,0.1)", // Subtle shadow for contrast
                       }}
                     >
-                      {name}: {value} ({(percent * 100).toFixed(1)}%)
+                      {`${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
                     </text>
                   );
                 }}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={52} outerRadius={82}
-                paddingAngle={2}
                 isAnimationActive
               >
-                {feedbackTypeData.map((e, idx) =>
-                  <Cell key={e.name} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="#fff" strokeWidth={2} />
-                )}
+                {/* Changed how cells are mapped to use PIE_COLORS directly for Promoters, Neutral, Detractors */}
+                {feedbackTypeData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="#fff" strokeWidth={2} />
+                ))}
               </Pie>
               <Tooltip formatter={(val, name, p) =>
                 [val, p && p && p.payload ? p.payload.name : name]
@@ -383,11 +447,50 @@ const Dashboard = ({
         </div>
       </div>
 
+      {/* Reviews Over Time Line Chart */}
+      <div className="bg-white p-6 rounded-lg shadow-md mt-8">
+        <h5 className="text-lg font-semibold text-gray-800 mb-4">Reviews Over Time</h5>
+        {reviewsOverTimeData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart
+              data={reviewsOverTimeData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis label={{ value: 'Number of Reviews', angle: -90, position: 'insideLeft' }} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="count" stroke="#82ca9d" activeDot={{ r: 8 }} name="Reviews" />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-600 text-center">No historical review data available for charting.</p>
+        )}
+      </div>
+
       {/* ================= REVIEW TABLE SECTION ================ */}
       <div style={{
         margin: "50px 0 30px 0", fontSize: 20, color: "#1565c0",
-        fontWeight: 800, paddingTop: 25
-      }}>All Reviews ({reviews.length})</div>
+        fontWeight: 800, paddingTop: 25, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px"
+      }}>
+        Reviews Dump ({reviews.length})
+        <button
+          onClick={exportReviewsAsExcel}
+          className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+        >
+          {/* Export icon SVG */}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v4a2 2 0 01-2 2H7a2 2 0 01-2-2V4zm0 6h10v4a2 2 0 01-2 2H7a2 2 0 01-2-2v-4zm2-6h6V4H7v2zm0 6h6v4H7v-4z" clipRule="evenodd" />
+            <path d="M10 12a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1z" />
+            <path fillRule="evenodd" d="M10 18a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M10 2a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M10 10a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M10 6a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+          Export
+        </button>
+      </div>
       {(isLoading || (!reviews || reviews.length === 0)) && (
         <div style={{
           textAlign: 'center', margin: '26px', fontSize: 16,
@@ -397,63 +500,60 @@ const Dashboard = ({
         </div>
       )}
       {!isLoading && reviews.length > 0 && (
-        <div style={{
-          overflowX: 'auto',
-          background: "#fff", borderRadius: 11,
-          boxShadow: "0 2px 18px #1976d111",
-          padding: 16
-        }}>
-          <table style={{
-            minWidth: 1170, borderCollapse: 'collapse', fontFamily: FONT_FAMILY
-          }}>
-            <thead>
-              <tr style={{
-                background: "#e3f2fd", fontWeight: "bold", fontSize: 15, color: "#1976d2"
-              }}>
-                <th style={{ padding: "10px 7px" }}>Rating</th>
-                <th style={{ padding: "10px 7px" }}>Customer Name</th>
-                <th style={{ padding: "10px 7px" }}>Customer Mobile</th>
-                <th style={{ padding: "10px 7px" }}>Client Email</th>
-                <th style={{ padding: "10px 7px" }}>Branch</th>
-                <th style={{ padding: "10px 7px" }}>Transcribed Text</th>
-                <th style={{ padding: "10px 7px" }}>Voice Audio</th>
-                <th style={{ padding: "10px 7px" }}>Invoice Data</th>
-                <th style={{ padding: "10px 7px" }}>Date</th>
+        <div className="overflow-x-auto rounded-xl shadow-lg border border-gray-200 w-full"> {/* Use w-full here */}
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Customer Data</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Transcribed Text</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Rating</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">Voice Audio</th>
               </tr>
             </thead>
-            <tbody>
-              {reviews.map((review, i) => (
-                <tr key={review._id || i} style={{ background: i % 2 === 0 ? "#f5fafd" : "#fff" }}>
-                  <td style={{ padding: "7px 5px", fontWeight: 700, color: "#388e3c" }}>{review.rating}</td>
-                  <td style={{ padding: "7px 5px" }}>{review.customerName}</td>
-                  <td style={{ padding: "7px 5px" }}>{review.customerMobile}</td>
-                  <td style={{ padding: "7px 5px" }}>{review.client?.email || 'N/A'}</td>
-                  <td style={{ padding: "7px 5px" }}>{review.branch?.name || 'N/A'}</td>
-                  <td style={{ padding: "7px 5px" }}>{review.transcribedText || review.textReview || 'N/A'}</td>
-                  <td style={{ padding: "7px 5px" }}>
-                    {review.voiceData ? (
-                      <audio controls style={{ width: 130 }}>
-                        <source src={review.voiceData} type="audio/mpeg" />
-                        Your browser does not support the audio element.
-                      </audio>
-                    ) : 'N/A'}
-                  </td>
-                  <td style={{ padding: "7px 5px", fontSize: 13 }}>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reviews.map((review) => (
+                <tr key={review._id} className="hover:bg-gray-50 transition-colors duration-200">
+                  {/* Customer Data Column */}
+                  <td className="px-6 py-4 text-base text-gray-700" data-label="Customer Data">
+                    <p className="font-semibold">{review.customerName || 'N/A'}</p>
+                    <p className="text-sm text-gray-500">Mobile: {review.customerMobile || 'N/A'}</p>
                     {review.invoiceData ? (
-                      <div style={{ whiteSpace: 'pre-line', lineHeight: 1.4, }}>
-                        {review.invoiceData.jobCardNumber && <>Job Card: {review.invoiceData.jobCardNumber}<br /></>}
-                        {review.invoiceData.invoiceNumber && <>Invoice No: {review.invoiceData.invoiceNumber}<br /></>}
-                        {review.invoiceData.invoiceDate && <>Inv Date: {review.invoiceData.invoiceDate}<br /></>}
-                        {review.invoiceData.vin && <>VIN: {review.invoiceData.vin}<br /></>}
-                        {review.invoiceData.customerNameFromInvoice && <>Cust Name (Inv): {review.invoiceData.customerNameFromInvoice}<br /></>}
-                        {review.invoiceData.customerMobileFromInvoice && <>Cust Mobile (Inv): {review.invoiceData.customerMobileFromInvoice}<br /></>}
-                        {review.invoiceFileUrl &&
-                          (<a href={review.invoiceFileUrl} target='_blank' rel='noopener noreferrer' style={{ color: "#1976d2" }}>View File</a>)}
+                      <div className="text-xs mt-2 space-y-1">
+                        {review.invoiceData.vin && <p><span className="font-semibold">VIN:</span> {review.invoiceData.vin}</p>}
+                        {review.invoiceData.jobCardNumber && <p><span className="font-semibold">Job Card:</span> {review.invoiceData.jobCardNumber}</p>}
+                        {review.invoiceData.invoiceNumber && <p><span className="font-semibold">Invoice No:</span> {review.invoiceData.invoiceNumber}</p>}
+                        {review.invoiceData.invoiceDate && <p><span className="font-semibold">Inv Date:</span> {formatDate(review.invoiceData.invoiceDate)}</p>}
+                        {review.invoiceFileUrl && (
+                          <a
+                            href={review.invoiceFileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline block mt-2 font-medium"
+                          >
+                            View File
+                          </a>
+                        )}
                       </div>
                     ) : 'N/A'}
                   </td>
-                  <td style={{ padding: "7px 5px" }}>
+                  {/* Transcribed Text Column */}
+                  <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis text-sm text-gray-700" data-label="Transcribed Text">
+                    {review.transcribedText || 'N/A'}
+                  </td>
+                  {/* Date Column */}
+                  <td className="px-6 py-4 whitespace-nowrap text-base text-gray-700" data-label="Date">
                     {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'N/A'}
+                  </td>
+                  {/* Rating Column */}
+                  <td className="px-6 py-4 text-lg font-medium text-gray-900" data-label="Rating">
+                    {review.rating} <span className="text-2xl">{getRatingEmoji(review.rating)}</span>
+                  </td>
+                  {/* Voice Audio Column */}
+                  <td className="px-6 py-4 text-base text-gray-700" data-label="Voice Audio">
+                    {review.voiceData ? (
+                      <audio controls src={review.voiceData} className="w-full max-w-[150px] h-10 rounded-lg"></audio>
+                    ) : 'N/A'}
                   </td>
                 </tr>
               ))}

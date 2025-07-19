@@ -224,7 +224,7 @@ const App = () => {
 
   // ---- RENDER ----
   return (
-    <div className="font-sans antialiased text-gray-900 bg-gray-100 min-h-screen">
+    <div className="font-sans antialiased text-gray-900 min-h-screen">
       {/* LOGIN PAGE */}
       {currentView === 'login' && (
         <div className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -379,7 +379,7 @@ const App = () => {
                 className={`py-3 px-6 text-lg font-semibold transition-all duration-300 ease-in-out rounded-t-lg 
                   ${activeTab === 'dashboard'
                     ? 'text-blue-700 border-b-4 border-blue-700 bg-blue-50'
-                    : 'text-gray-600 hover:text-blue-600 hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-blue-600 hover:'
                   }`}
                 onClick={() => setActiveTab('dashboard')}
               >
@@ -389,7 +389,7 @@ const App = () => {
                 className={`py-3 px-6 text-lg font-semibold transition-all duration-300 ease-in-out rounded-t-lg 
                   ${activeTab === 'manage'
                     ? 'text-blue-700 border-b-4 border-blue-700 bg-blue-50'
-                    : 'text-gray-600 hover:text-blue-600 hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-blue-600 hover:'
                   }`}
                 onClick={() => setActiveTab('manage')}
               >

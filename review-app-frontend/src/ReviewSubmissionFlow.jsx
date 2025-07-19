@@ -496,7 +496,7 @@ const ReviewSubmissionFlow = ({
   const getRatingEmoji = (rating) => {
     if (rating === 1) return '😡';
     if (rating === 2) return '😠';
-    if (rating === 3) return '�';
+    if (rating === 3) return '😟';
     if (rating === 4) return '😐';
     if (rating === 5) return '😕';
     if (rating === 6) return '🙂';
@@ -603,7 +603,7 @@ const ReviewSubmissionFlow = ({
           textColor: 'text-blue-800',
           emoji: '✅',
           messageColor: 'text-blue-700',
-          buttonBg: 'bg-blue-600 hover:bg-blue-700',
+          buttonBg: 'bg-blue-600 hover:bg-blue-600', // Changed to blue-600
           title: 'Feedback Submitted!',
         };
     }
@@ -642,7 +642,7 @@ const ReviewSubmissionFlow = ({
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       {currentStep === 'invoiceUpload' && (
         <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
-          <h2 className="text-5xl font-extrabold text-white text-center mb-10 tracking-tight"> {/* Changed text color here */}
+          <h2 className="text-5xl font-extrabold text-orange-500 text-center mb-10 tracking-tight"> {/* Changed text color here */}
             Initiate Customer Feedback
           </h2>
           <div className="bg-white p-10 rounded-2xl shadow-xl w-full border border-blue-200 transition-all duration-500 transform hover:scale-[1.01]"> {/* Light card */}
@@ -655,7 +655,7 @@ const ReviewSubmissionFlow = ({
                   type="file"
                   id="invoiceFile"
                   accept=".pdf, .jpg, .jpeg, .png"
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200 bg-gray-50 text-gray-800 placeholder-gray-400"
+                  className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg transition duration-200 bg-gray-50 text-gray-800 placeholder-gray-400"
                   onChange={handleInvoiceFileChange}
                 />
               </div>
@@ -677,14 +677,14 @@ const ReviewSubmissionFlow = ({
                       Processing Invoice...
                     </>
                   ) : (
-                    'Upload & Extract Details'
+                    'Next'
                   )}
                 </button>
               )}
 
               {extractedInvoiceData && (
                 <div className="mt-8 p-6 bg-blue-50 rounded-xl border border-blue-200 shadow-inner text-gray-800"> {/* Lighter nested card */}
-                  <h3 className="text-2xl font-bold text-blue-700 mb-5 text-center">Review & Confirm Extracted Details</h3>
+                  <h3 className="text-2xl font-bold text-blue-700 mb-5 text-center">Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-base">
                     {/* Job Card Number */}
                     <div className="flex flex-col">
@@ -776,7 +776,7 @@ const ReviewSubmissionFlow = ({
                     onClick={handleConfirmDetailsAndProceed}
                     className="w-full flex justify-center py-3 px-6 border border-transparent rounded-lg shadow-md text-xl font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 ease-in-out transform hover:scale-105 mt-8"
                   >
-                    Confirm Details & Proceed to Review
+                    Confirm Customer Details
                   </button>
                 </div>
               )}
@@ -787,7 +787,7 @@ const ReviewSubmissionFlow = ({
 
       {currentStep === 'customerReview' && (
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
-          <h2 className="text-5xl font-extrabold text-indigo-800 text-center mb-10 tracking-tight"> {/* Changed text color here */}
+          <h2 className="text-5xl font-extrabold text-orange-500 text-center mb-10 tracking-tight"> {/* Changed text color here */}
             How was your service experience?
           </h2>
 
@@ -827,7 +827,7 @@ const ReviewSubmissionFlow = ({
 
       {currentStep === 'voiceRecording' && (
         <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
-          <h2 className="text-5xl font-extrabold text-indigo-800 text-center mb-10 tracking-tight"> {/* Changed text color here */}
+          <h2 className="text-5xl font-extrabold text-orange-500 text-center mb-10 tracking-tight"> {/* Changed text color here */}
             Share Your Valuable Feedback
           </h2>
 

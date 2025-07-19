@@ -35,7 +35,9 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
         companyId: user.company, // Send companyId to frontend
-        branchId: user.branch,   // Send branchId to frontend
+        branchId: user.branch, 
+        customerName: user.customerName, // Include customerName
+        customerMobile: user.customerMobile, // Include customerMobile
         token: token,
       });
     } else {
@@ -123,5 +125,43 @@ exports.resetPasswordWithOTP = async (req, res) => {
   } catch (error) {
     console.error('Error resetting password with OTP:', error);
     res.status(500).json({ message: 'Server error resetting password.', error: error.message });
+  }
+};
+
+// @desc    Change user password (requires authentication)
+// @route   PUT /api/auth/change-password
+// @access  Private
+exports.changePassword = async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+
+  // req.user is populated by the protect middleware
+  const userId = req.user.id; 
+
+  try {
+    const user = await User.findById(userId).select('+password'); // Select password to compare
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Check old password
+    if (!(await user.matchPassword(oldPassword))) {
+      return res.status(400).json({ message: 'Old password is incorrect.' });
+    }
+
+    // Validate new password length (optional, but good practice)
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long.' });
+    }
+
+    // Set new password (pre-save hook will hash it)
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password changed successfully!' });
+
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ message: 'Server error changing password.', error: error.message });
   }
 };

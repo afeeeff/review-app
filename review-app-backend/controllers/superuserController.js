@@ -70,7 +70,9 @@ exports.createCompany = async (req, res) => {
       username: adminEmail,
       password: adminPassword, // Send plain password for initial login
       role: 'Company Admin',
-      loginLink: 'company.instantreviews.in'
+      loginLink: 'company.instantreviews.in',
+      name: companyName
+
     });
     // --- END NEW EMAIL ---
 
@@ -301,7 +303,8 @@ exports.createBranch = async (req, res) => {
       username: adminEmail,
       password: adminPassword, // Send plain password for initial login
       role: 'Branch Admin',
-      loginLink: 'branch.instantreviews.in'
+      loginLink: 'branch.instantreviews.in',
+      name: branchName
     });
     // --- END NEW EMAIL ---
 
@@ -510,7 +513,8 @@ exports.createClient = async (req, res) => {
       branch: parentBranchId,
       customerName: customerName,
       customerMobile: customerMobile,
-      notificationEmails: notificationEmails || [], // Save notification emails
+      notificationEmails: notificationEmails || [],
+      name: customerName // Save notification emails
     });
 
     // Generate token for the newly created client

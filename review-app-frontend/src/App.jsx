@@ -288,7 +288,7 @@ const App = () => {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-lg text-center border border-blue-200">
         <h2 className="text-4xl font-extrabold text-blue-700 mb-6">Welcome, {userData?.customerName || userData?.email}!</h2>
-        <p className="text-lg text-gray-700 mb-8">Ready to provide feedback on your recent service experience?</p>
+        
         <button
           onClick={() => setCurrentView('dashboard')} // Transition to the dashboard view
           className="py-3 px-8 bg-blue-600 text-white font-bold text-xl rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 ease-in-out transform hover:scale-105"
